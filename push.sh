@@ -1,0 +1,1 @@
+/home/ook/proj/fashion/push.sh
