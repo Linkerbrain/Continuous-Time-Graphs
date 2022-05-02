@@ -40,14 +40,15 @@ def make_datalaoders(graph, params):
         train_dataloader = list(temporal_ds.train_dataloader())
         val_dataloader = list(temporal_ds.val_dataloader())
         test_dataloader = list(temporal_ds.test_dataloader())
+        import pdb; pdb.set_trace()
     elif params.sampler == 'ordered':
         raise NotImplementedError()
     else:
         raise NotImplementedError()
 
-    train_dataloader_gen = lambda _epoch: train_dataloader
-    val_dataloader_gen = lambda _epoch: val_dataloader
-    test_dataloader_gen = lambda _epoch: test_dataloader
+    train_dataloader_gen = lambda _epoch: iter(train_dataloader)
+    val_dataloader_gen = lambda _epoch: iter(val_dataloader)
+    test_dataloader_gen = lambda _epoch: iter(test_dataloader)
 
     return train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
 
@@ -107,17 +108,17 @@ def main(params):
 
     if not params.notrain:
         logger.info('Training model...')
-        trainer.fit(model, train_dataloader_gen)
+        trainer.fit(model)
         logger.info('Done')
 
     if not params.novalidate:
         logger.info('Validating model...')
-        trainer.validate(model, val_dataloader_gen)
+        trainer.validate(model)
         logger.info('Done')
 
     if not params.notest:
         logger.info('Testing model...')
-        trainer.test(model, test_dataloader_gen)
+        trainer.test(model, test_dataloader_gen(model.current_epoch))
         logger.info('Done')
 
     # For interactive sessions/debugging
