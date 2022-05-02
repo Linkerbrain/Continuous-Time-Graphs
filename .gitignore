@@ -6,3 +6,4 @@ venv
 .idea
 keys.sh
 hm
+.neptune
