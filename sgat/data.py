@@ -5,14 +5,44 @@ import pandas as pd
 import logging
 from torch_geometric.data import HeteroData
 
-from sgat import instagram, features
+from sgat import instagram, features, logger
 
 import torch_geometric.transforms as T
 
-BEAUTY_PATH = "amazon/Beauty.csv"
+AMAZON_PATH = "amazon"
 HM_PATH = "hm"
 
 AMAZON_DATASETS = ['beauty', 'cd', 'games', 'movie']
+
+
+# noinspection PyTypeChecker
+def amazon_dataset(name):
+    logger.info(f"Loading amazon/{name} dataset...")
+
+    df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"}, axis=1)
+
+    customers = df['u'].unique()
+    articles = df['i'].unique()
+
+    assert customers.max() + 1 == len(customers)
+    assert articles.max() + 1 == len(articles)
+
+    data = HeteroData()
+
+    customer_indexes = df['u'].to_numpy()
+    article_indexes = df['i'].to_numpy()
+
+    data['u', 'b', 'i'].edge_index = np.concatenate([customer_indexes[None, :], article_indexes[None, :]], axis=0)
+
+    data['u'].code = customers
+    data['i'].code = articles
+    data['u', 'b', 'i'].code = np.arange(len(df))
+
+    data['u', 'b', 'i'].t = df["t"].to_numpy()
+
+    logger.info("Done")
+    return data
+
 
 class HMData(object):
     def __init__(self, load=True, features=True):
@@ -22,18 +52,18 @@ class HMData(object):
             self._create_features()
 
     def _load_data(self):
-        logging.info("Loading H&M data...")
+        logger.info("Loading H&M data...")
         self.df_transactions = pd.read_parquet(f'{HM_PATH}/transactions_parquet.parquet')
         self.df_customers = pd.read_parquet(f'{HM_PATH}/customers_parquet.parquet')
         self.df_articles = pd.read_parquet(f'{HM_PATH}/articles_parquet.parquet')
-        logging.info("Done")
+        logger.info("Done")
 
         # Convert date column to datetime
         self.df_transactions["date"] = pd.to_datetime(self.df_transactions["t_dat"], format="%Y-%m-%d")
 
 
     def _create_features(self):
-        logging.info("Creating H&M features...")
+        logger.info("Creating H&M features...")
         articles_ = self.df_articles
         articles = articles_.pipe(instagram.add_post_data_articles, instapath=f"{HM_PATH}/hm/")
         articles_features = articles.pipe(features.one_hot_concat,
@@ -68,7 +98,7 @@ class HMData(object):
                                                   merge_threshold=1,
                                                   verbose=False
                                                   )
-        logging.info("Done")
+        logger.info("Done")
         self.farticles = articles_features
         self.fcustomers = customers_features
         self.ftransactions = transactions_features
@@ -102,7 +132,7 @@ class HMData(object):
 
     # noinspection PyTypeChecker
     def as_graph(self):
-        logging.info("Creating H&M graph...")
+        logger.info("Creating H&M graph...")
         data = HeteroData()
         data['u'].x = self.fcustomers.to_numpy()
         data['i'].x = self.farticles.to_numpy()
@@ -113,14 +143,18 @@ class HMData(object):
         ai = self.farticles.assign(index=np.arange(len(self.farticles)))
         article_indexes = ai.loc[self.df_transactions['article_id'], 'index'].to_numpy()
 
-        data['u', 'bought', 'i'].edge_index = np.concatenate(
+        data['u', 'b', 'i'].edge_index = np.concatenate(
             [customer_indexes[None, :], article_indexes[None, :]], axis=0)
-        data['u', 'bought', 'i'].edge_attr = self.ftransactions.to_numpy()
+        data['u', 'b', 'i'].edge_attr = self.ftransactions.to_numpy()
 
         data['u'].code = np.arange(self.fcustomers.shape[0])  # fcustomers.index.to_numpy())
         data['i'].code = np.arange(self.farticles.shape[0])  # farticles.index.to_numpy())
-        data['u', 'bought', 'i'].code = np.arange(self.ftransactions.shape[0])
+        data['u', 'b', 'i'].code = np.arange(self.ftransactions.shape[0])
 
-        logging.info("Done")
-        return data, pd.to_datetime(self.df_transactions["date"].to_numpy())
+        # Rich date information
+        data['u', 'b', 'i'].dates = self.df_transactions["date"].to_numpy()
+
+        # Day numbers since unix epoch
+        data['u', 'b', 'i'].t = (self.df_transactions["date"] - np.datetime64('1970')).dt.days.to_numpy()
+        return data
 

@@ -1,14 +1,64 @@
 import numpy as np
 import pandas as pd
+import torch
 from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
+import numpy_indexed as npi
+
+
+def numpy_to_torch(data):
+    """
+    Convert numpy-graph to torch-graph
+
+    Torch geometric always expects torch-graphs
+
+    Args:
+        data:
+
+    Returns:
+
+    """
+    for batch in data if type(data) is not HeteroData else [data]:
+        graph = HeteroData()
+
+        for k, v in batch.items():
+            for attribute, value in v.items():
+                graph[k][attribute] = torch.tensor(value, dtype=torch.long if attribute == 'edge_index' else None)
+
+        if type(data) is HeteroData:
+            return graph
+        else:
+            yield graph
 
 
 # noinspection PyTypeChecker
-def make_subset(data, filter_transactions=slice(None)):
+def make_subset(data, filter_transactions=slice(None), filter_customers=None, filter_articles=None):
+    """
+
+    Args:
+        data:
+        filter_transactions: Must be mask
+        filter_customers: Must be mask
+        filter_articles: Must be mask
+
+    Returns:
+
+    """
     subdata = HeteroData()
 
-    forward = ('u', 'bought', 'i')
+    forward = ('u', 'b', 'i')
+
+    if filter_customers is not None:
+        # Edges must also be from wanted customers
+        customer_indices = np.argwhere(filter_customers)
+        filter_transactions &= np.isin(data[forward].edge_index[0], customer_indices)
+
+    if filter_articles is not None:
+        # And from wanted articles
+        article_indices = np.argwhere(filter_articles)
+        filter_transactions &= np.isin(data[forward].edge_index[1], article_indices)
+
+    # Remove the unwanted edges
     subdata[forward].edge_index = data[forward].edge_index[:, filter_transactions]
 
     for k, v in data[forward].items():
@@ -28,7 +78,7 @@ def make_subset(data, filter_transactions=slice(None)):
 
 class TemporalDataset(Dataset):
     # noinspection PyTypeChecker
-    def __init__(self, graph, dates, chunk_days=7, embedding_chunks=4, supervision_chunks=1, val_splits=2,
+    def __init__(self, graph, chunk_size=7, embedding_chunks=4, supervision_chunks=1, val_splits=2,
                  test_splits=0,
                  negative_examples_ratio=1.0):
         """
@@ -52,28 +102,66 @@ class TemporalDataset(Dataset):
         if negative_examples_ratio != 1.0:
             raise NotImplementedError()
 
-        week = dates.floor(pd.Timedelta(chunk_days, 'D'))
+        t = graph['u', 'b', 'i'].t
+
+        # if np.issubdtype(t.dtype, np.datetime64):
+        #     # week = t.floor(pd.Timedelta(chunk_days, 'D'))
+        #     chunk = np.floor_divide(t, pd.Timedelta(chunk_size, 'D'))
+        # else:
+        chunk = np.floor_divide(t, chunk_size)
         timesteps = []
-        for w in week.unique():
-            subset = week == w  # ordering of transactions and edges on data is the same
+        for w in np.unique(chunk):
+            subset = chunk == w  # ordering of transactions and edges on data is the same
             # subdata = make_subset(data, filter_transactions=subset)
             # timesteps.append(subdata)
             timesteps.append(subset)
         self.timesteps = list(timesteps)
 
+    @staticmethod
+    def add_args(parser):
+        parser.add_argument('--chunk_size', type=int, default=7,
+                            help="This is either days for hm data or a number for amazon data. For Beauty 10000000 gives 42 chunks")
+        parser.add_argument('--embedding_chunks', type=int, default=4)
+        parser.add_argument('--supervision_chunks', type=int, default=1)
+        parser.add_argument('--val_splits', type=int, default=2)
+        parser.add_argument('--test_splits', type=int, default=0)
+
     # noinspection PyTypeChecker
     def make_split(self, chunks):
+        # TODO: Resample embedding_graph only from users in the supervision graph
+
         embedding_graph = make_subset(self.graph,
                                       filter_transactions=np.bitwise_or.reduce(chunks[:self.embedding_chunks]))
 
         supervision_graph = make_subset(self.graph,
                                         filter_transactions=np.bitwise_or.reduce(chunks[self.embedding_chunks:]))
-        edges = supervision_graph['u', 'bought', 'i']
+
+        # noinspection PyUnreachableCode
+        if True:  # TODO: Add as option to remove or not cold starts
+            # Remove cold starts
+            filter_customers = np.isin(supervision_graph['u'].code, embedding_graph['u'].code)
+            filter_articles = np.isin(supervision_graph['i'].code, embedding_graph['i'].code)
+            supervision_graph = make_subset(supervision_graph,
+                                            filter_customers=filter_customers, filter_articles=filter_articles)
+        else:
+            # Add isolated nodes to embedding_graph?
+            pass
+
+        edges = supervision_graph['u', 'b', 'i']
+
+        # Pointer to the index of these nodes in embedding_graph, by this point it should be guaranteed that all
+        # nodes in the supervision graph are also in the embedding graph
+        supervision_graph['u'].ptr = npi.indices(embedding_graph['u'].code, supervision_graph['u'].code)
+        supervision_graph['i'].ptr = npi.indices(embedding_graph['i'].code, supervision_graph['i'].code)
+        supervision_graph['u', 'b', 'i'].ptr = np.concatenate(
+            (supervision_graph['u'].ptr[edges.edge_index[0]], supervision_graph['i'].ptr[edges.edge_index[1]]),
+            axis=0
+        )
 
         # Fake edges added as negative examples
         fake_edges = np.zeros_like(edges.edge_index)
-        fake_edges[0, :] = np.random.randint(supervision_graph['u'].code.shape[0], size=edges.shape[1])
-        fake_edges[1, :] = np.random.randint(supervision_graph['i'].code.shape[0], size=edges.shape[1])
+        fake_edges[0, :] = np.random.randint(supervision_graph['u'].code.shape[0], size=edges.edge_index.shape[1])
+        fake_edges[1, :] = np.random.randint(supervision_graph['i'].code.shape[0], size=edges.edge_index.shape[1])
         edges.edge_index = np.concatenate([edges.edge_index, fake_edges], axis=1)
 
         edges.label = np.ones_like(edges.edge_index)
@@ -107,7 +195,7 @@ class TemporalDataset(Dataset):
         return self.timesteps[idx]
 
 
-def add_transaction_order(data, dates):
+def add_transaction_order(data):
     """
     Adds the following edge attributes:
 
