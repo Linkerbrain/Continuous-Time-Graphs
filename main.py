@@ -6,6 +6,7 @@ from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
 
 import sgat.models.gat
+import sgat.models.dgsr
 from sgat import data, graphs, models
 
 import pytorch_lightning as pl
@@ -37,7 +38,6 @@ def make_datalaoders(graph, params):
         train_dataloader = list(temporal_ds.train_dataloader())
         val_dataloader = list(temporal_ds.val_dataloader())
         test_dataloader = list(temporal_ds.test_dataloader())
-        import pdb; pdb.set_trace()
     elif params.sampler == 'ordered':
         raise NotImplementedError()
     else:
@@ -154,7 +154,11 @@ if __name__ == "__main__":
     model_subparser = parser_train.add_subparsers(dest='model')
 
     parser_dgsr = model_subparser.add_parser('DGSR')
-    # models.dgsr.add_args(parser_dgsr)
+    models.dgsr.DGSR.add_args(parser_dgsr)
+
+    gat_sampler_subparser = parser_dgsr.add_subparsers(dest='sampler')
+    parser_periodic = gat_sampler_subparser.add_parser('periodic')
+    graphs.TemporalDataset.add_args(parser_periodic)
 
     parser_gat = model_subparser.add_parser('GAT')
     models.gat.GAT.add_args(parser_gat)
