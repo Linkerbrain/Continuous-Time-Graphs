@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 
 class SgatModule(pl.LightningModule):
     def __init__(self, graph, params, train_dataloader_gen, val_dataloader_gen):
+        super(SgatModule, self).__init__()
         self.graph = graph
         self.params = params
         self.train_dataloader_gen = train_dataloader_gen

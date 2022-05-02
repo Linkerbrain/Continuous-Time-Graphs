@@ -32,7 +32,7 @@ def numpy_to_torch(data):
 
 
 # noinspection PyTypeChecker
-def make_subset(data, filter_transactions=slice(None), filter_customers=None, filter_articles=None):
+def make_subset(data, filter_transactions=None, filter_customers=None, filter_articles=None):
     """
 
     Args:
@@ -47,6 +47,9 @@ def make_subset(data, filter_transactions=slice(None), filter_customers=None, fi
     subdata = HeteroData()
 
     forward = ('u', 'b', 'i')
+
+    if filter_transactions is None:
+        filter_transactions = np.ones(data[forward].code.shape[0], dtype=np.bool)
 
     if filter_customers is not None:
         # Edges must also be from wanted customers
@@ -72,6 +75,10 @@ def make_subset(data, filter_transactions=slice(None), filter_customers=None, fi
         subdata['u'][k] = v[customers]
     for k, v in data['i'].items():
         subdata['i'][k] = v[articles]
+
+    # Make the edges point to the smaller set of users/items
+    subdata[forward].edge_index[0] = npi.indices(customers, subdata[forward].edge_index[0])
+    subdata[forward].edge_index[1] = npi.indices(articles, subdata[forward].edge_index[1])
 
     return subdata
 
