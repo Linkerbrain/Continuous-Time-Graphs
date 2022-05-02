@@ -32,10 +32,7 @@ def make_dataset(params):
 
 def make_datalaoders(graph, params):
     if params.sampler == 'periodic':
-        temporal_ds = graphs.TemporalDataset(graph, chunk_size=params.chunk_size,
-                                             embedding_chunks=params.embedding_chunks,
-                                             supervision_chunks=params.supervision_chunks, val_splits=params.val_splits,
-                                             test_splits=params.test_splits)
+        temporal_ds = graphs.TemporalDataset(graph, params)
 
         train_dataloader = list(temporal_ds.train_dataloader())
         val_dataloader = list(temporal_ds.val_dataloader())

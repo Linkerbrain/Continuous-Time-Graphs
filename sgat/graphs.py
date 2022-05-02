@@ -85,9 +85,10 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
 
 class TemporalDataset(Dataset):
     # noinspection PyTypeChecker
-    def __init__(self, graph, chunk_size=7, embedding_chunks=4, supervision_chunks=1, val_splits=2,
-                 test_splits=0,
-                 negative_examples_ratio=1.0):
+    def __init__(self, graph, params):
+        # chunk_size=7, embedding_chunks=4, supervision_chunks=1, val_splits=2,
+        #          test_splits=0,
+        #          negative_examples_ratio=1.0):
         """
         Step 0 (this class): Iterate over weeks of the data
         Step 1: Make a rolling dataset of the "past" as weeks progress, with the current week as target
@@ -100,13 +101,16 @@ class TemporalDataset(Dataset):
 
         This model would likely take days if not weeks to train fully
         """
-        self.embedding_chunks = embedding_chunks
-        self.supervision_chunks = supervision_chunks
-        self.val_splits = val_splits
-        self.test_splits = test_splits
+        self.chunk_size = params.chunk_size
+        self.embedding_chunks = params.embedding_chunks
+        self.supervision_chunks = params.supervision_chunks
+        self.val_splits = params.val_splits
+        self.test_splits = params.test_splits
+        self.skip_chunks = params.skip_chunks
+
         self.graph = graph
 
-        if negative_examples_ratio != 1.0:
+        if params.negative_examples_ratio != 1.0:
             raise NotImplementedError()
 
         t = graph['u', 'b', 'i'].t
@@ -115,9 +119,9 @@ class TemporalDataset(Dataset):
         #     # week = t.floor(pd.Timedelta(chunk_days, 'D'))
         #     chunk = np.floor_divide(t, pd.Timedelta(chunk_size, 'D'))
         # else:
-        chunk = np.floor_divide(t, chunk_size)
+        chunk = np.floor_divide(t, self.chunk_size)
         timesteps = []
-        for w in np.unique(chunk):
+        for w in np.unique(chunk)[self.skip_chunks:]:
             subset = chunk == w  # ordering of transactions and edges on data is the same
             # subdata = make_subset(data, filter_transactions=subset)
             # timesteps.append(subdata)
@@ -132,6 +136,8 @@ class TemporalDataset(Dataset):
         parser.add_argument('--supervision_chunks', type=int, default=1)
         parser.add_argument('--val_splits', type=int, default=2)
         parser.add_argument('--test_splits', type=int, default=0)
+        parser.add_argument('--skip_chunks', type=int, default=0, help="Skip the first n chunks")
+        parser.add_argument('--negative_examples_ratio', type=float, default=1.0)
 
     # noinspection PyTypeChecker
     def make_split(self, chunks):
