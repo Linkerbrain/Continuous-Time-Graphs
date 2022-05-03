@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 from torch_geometric.data import HeteroData
 
-from sgat import instagram, features, logger
+from sgat import instagram, features, logger, Task, task
 
 import torch_geometric.transforms as T
 
@@ -17,7 +17,7 @@ AMAZON_DATASETS = ['beauty', 'cd', 'games', 'movie']
 
 # noinspection PyTypeChecker
 def amazon_dataset(name):
-    logger.info(f"Loading amazon/{name} dataset...")
+    task = Task(f"Loading amazon/{name} dataset").start()
 
     df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"}, axis=1)
 
@@ -40,7 +40,7 @@ def amazon_dataset(name):
 
     data['u', 'b', 'i'].t = df["t"].to_numpy()
 
-    logger.info("Done")
+    task.done()
     return data
 
 
@@ -51,19 +51,18 @@ class HMData(object):
         if features:
             self._create_features()
 
+    @task("Loading H&M data")
     def _load_data(self):
-        logger.info("Loading H&M data...")
         self.df_transactions = pd.read_parquet(f'{HM_PATH}/transactions_parquet.parquet')
         self.df_customers = pd.read_parquet(f'{HM_PATH}/customers_parquet.parquet')
         self.df_articles = pd.read_parquet(f'{HM_PATH}/articles_parquet.parquet')
-        logger.info("Done")
 
         # Convert date column to datetime
         self.df_transactions["date"] = pd.to_datetime(self.df_transactions["t_dat"], format="%Y-%m-%d")
 
 
+    @task("Creating H&M features")
     def _create_features(self):
-        logger.info("Creating H&M features...")
         articles_ = self.df_articles
         articles = articles_.pipe(instagram.add_post_data_articles, instapath=f"{HM_PATH}/hm/")
         articles_features = articles.pipe(features.one_hot_concat,
@@ -98,10 +97,10 @@ class HMData(object):
                                                   merge_threshold=1,
                                                   verbose=False
                                                   )
-        logger.info("Done")
         self.farticles = articles_features
         self.fcustomers = customers_features
         self.ftransactions = transactions_features
+
 
     def subset(self, days=7, keep_all_customers=False):
         """
@@ -131,8 +130,9 @@ class HMData(object):
         return subdata
 
     # noinspection PyTypeChecker
+    @task("Creating H&M graph")
     def as_graph(self):
-        logger.info("Creating H&M graph...")
+        # task = Task("Creating H&M graph").start()
         data = HeteroData()
         data['u'].x = self.fcustomers.to_numpy()
         data['i'].x = self.farticles.to_numpy()
@@ -156,5 +156,7 @@ class HMData(object):
 
         # Day numbers since unix epoch
         data['u', 'b', 'i'].t = (self.df_transactions["date"] - np.datetime64('1970')).dt.days.to_numpy()
+
+        # task.done()
         return data
 

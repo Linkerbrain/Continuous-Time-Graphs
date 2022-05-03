@@ -21,9 +21,15 @@ def numpy_to_torch(data):
     for batch in data if type(data) is not HeteroData else [data]:
         graph = HeteroData()
 
-        for k, v in batch.items():
-            for attribute, value in v.items():
-                graph[k][attribute] = torch.tensor(value, dtype=torch.long if attribute == 'edge_index' else None)
+        for k in batch.node_types + batch.edge_types:
+            for attribute, value in batch[k].items():
+                if attribute == 'edge_index':
+                    dtype = torch.long
+                elif value.dtype == np.float:
+                    dtype = torch.float
+                else:
+                    dtype = None
+                graph[k][attribute] = torch.tensor(value, dtype=dtype)
 
         if type(data) is HeteroData:
             return graph
@@ -141,7 +147,7 @@ class TemporalDataset(Dataset):
 
     # noinspection PyTypeChecker
     def make_split(self, chunks):
-        # TODO: Resample embedding_graph only from users in the supervision graph
+        # TODO: Resample embedding_graph to the local neighborhood of users in the supervision graph
 
         embedding_graph = make_subset(self.graph,
                                       filter_transactions=np.bitwise_or.reduce(chunks[:self.embedding_chunks]))
@@ -160,27 +166,39 @@ class TemporalDataset(Dataset):
             # Add isolated nodes to embedding_graph?
             pass
 
-        edges = supervision_graph['u', 'b', 'i']
+        # Supervised 'bought' in the supervised graph
+        b = supervision_graph['u', 'b', 'i']
 
         # Pointer to the index of these nodes in embedding_graph, by this point it should be guaranteed that all
         # nodes in the supervision graph are also in the embedding graph
         supervision_graph['u'].ptr = npi.indices(embedding_graph['u'].code, supervision_graph['u'].code)
         supervision_graph['i'].ptr = npi.indices(embedding_graph['i'].code, supervision_graph['i'].code)
-        supervision_graph['u', 'b', 'i'].ptr = np.concatenate(
-            (supervision_graph['u'].ptr[edges.edge_index[0]], supervision_graph['i'].ptr[edges.edge_index[1]]),
+        b.ptr = np.stack(
+            (supervision_graph['u'].ptr[b.edge_index[0]], supervision_graph['i'].ptr[b.edge_index[1]]),
             axis=0
         )
 
         # Fake edges added as negative examples
-        fake_edges = np.zeros_like(edges.edge_index)
-        fake_edges[0, :] = np.random.randint(supervision_graph['u'].code.shape[0], size=edges.edge_index.shape[1])
-        fake_edges[1, :] = np.random.randint(supervision_graph['i'].code.shape[0], size=edges.edge_index.shape[1])
-        edges.edge_index = np.concatenate([edges.edge_index, fake_edges], axis=1)
+        fake_edges = np.zeros_like(b.ptr)
+        # Use same users so the model focuses on predicting what users will buy
+        # rather than whether they will buy anything or not
+        fake_edges[0, :] = b.ptr[0, :]
+        # Pick random items from all the items available in the graph.
+        # TODO: Pick only from the local neighbourhood of each user
+        fake_edges[1, :] = np.random.randint(embedding_graph['i'].code.shape[0], size=b.ptr.shape[1])
+        # Remove fake edges that are the same as real edges to prevent contradicting supervisions signals
+        fake_edges = fake_edges[:, ~npi.contains(b.ptr, fake_edges, axis=1)]
 
-        edges.label = np.ones_like(edges.edge_index)
-        edges.label[-fake_edges.shape[1]:] = 0
+        # 'Supervised' bought in the embedding graph
+        s = embedding_graph['u', 's', 'i']
+        s.edge_index = np.concatenate([b.ptr, fake_edges], axis=1)
 
-        return embedding_graph, supervision_graph
+        s.label = np.ones(s.edge_index.shape[1], dtype=np.float)
+        s.label[-fake_edges.shape[1]:] = 0
+
+
+
+        return embedding_graph
 
     def roll(self, timesteps):
         """ Do a rolling window over te time steps given and split into embedding graph and supervision graph"""
@@ -191,14 +209,14 @@ class TemporalDataset(Dataset):
         for chunks in zip(*zippers):
             yield self.make_split(chunks)
 
-    def train_dataloader(self):
+    def train_datal(self):
         yield from self.roll(self.timesteps[:-self.test_splits - self.val_splits])
 
-    def val_dataloader(self):
+    def val_datal(self):
         yield from self.roll(
             self.timesteps[-self.embedding_chunks - self.val_splits - self.test_splits: -self.test_splits])
 
-    def test_dataloader(self):
+    def test_data(self):
         yield from self.roll(self.timesteps[-self.embedding_chunks - self.test_splits:])
 
     def __len__(self):
