@@ -1,9 +1,12 @@
 import argparse
 import logging
+import random
+from typing import Sized, Iterable
 
 import torch
 from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
+from torch_geometric.loader import DataLoader
 
 from sgat import data, graphs, models, Task, task
 
@@ -12,7 +15,20 @@ import pytorch_lightning as pl
 from sgat import logger
 from sgat.graphs import numpy_to_torch
 from sgat.models import mh
+from sgat.models import dgsr
 
+class PrecomputedDataset(Iterable, Sized):
+    def __init__(self, batches, shuffle=True):
+        self.batches = list(numpy_to_torch(batches))
+        self.shuffle = shuffle
+
+    def __len__(self):
+        return len(self.batches)
+
+    def __iter__(self):
+        if self.shuffle:
+            random.shuffle(self.batches)
+        return iter(self.batches)
 
 @task('Making dataset')
 def make_dataset(params):
@@ -37,17 +53,18 @@ def make_datalaoders(graph, params):
     if params.sampler == 'periodic':
         temporal_ds = graphs.TemporalDataset(graph, params)
 
-        train_dataloader = list(numpy_to_torch(temporal_ds.train_dataloader()))
-        val_dataloader = list(numpy_to_torch(temporal_ds.val_dataloader()))
-        test_dataloader = list(numpy_to_torch(temporal_ds.test_dataloader()))
+        # PrecomputedDataset converts the arrays in the graphs to torch
+        train_data = PrecomputedDataset(temporal_ds.train_datal(), shuffle=not params.noshuffle)
+        val_data = PrecomputedDataset(temporal_ds.val_datal(), shuffle=not params.noshuffle)
+        test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
     elif params.sampler == 'ordered':
         raise NotImplementedError()
     else:
         raise NotImplementedError()
 
-    train_dataloader_gen = lambda _epoch: iter(train_dataloader)
-    val_dataloader_gen = lambda _epoch: iter(val_dataloader)
-    test_dataloader_gen = lambda _epoch: iter(test_dataloader)
+    train_dataloader_gen = lambda _epoch: train_data
+    val_dataloader_gen = lambda _epoch: val_data
+    test_dataloader_gen = lambda _epoch: test_data
 
     return train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
 
@@ -153,6 +170,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--nocold', action='store_true')
     parser_train.add_argument('--nologger', action='store_true')
     parser_train.add_argument('--notest', action='store_true')
+    parser_train.add_argument('--noshuffle', action='store_true')
 
     model_subparser = parser_train.add_subparsers(dest='model')
 

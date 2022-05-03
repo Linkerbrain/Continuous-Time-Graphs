@@ -93,7 +93,6 @@ class MH(SgatModule):
 
 
     def training_step(self, batch, batch_idx):
-
         predict_u = batch['u', 's', 'i'].edge_index[0]
         predict_i = batch['u', 's', 'i'].edge_index[1]
 
@@ -108,23 +107,23 @@ class MH(SgatModule):
         self.log('train/time', time.time())
         return loss
 
-    def validation_step(self, batch, batch_idx):
-
-        predict_u = batch['u', 's', 'i'].edge_index[0]
-        predict_i = batch['u', 's', 'i'].edge_index[1]
-
-        predictions = self.forward(batch, predict_u, predict_i)
-
-        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
-
-        self.log('val/MAP', MAP,)
-
-        self.log('val/loss', loss)
-        self.log('val/n_customers', float(batch['u'].code.shape[0]))
-        self.log('val/n_articles', float(batch['i'].code.shape[0]))
-        self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
-        self.log('val/time', time.time())
-        return loss
+    # def validation_step(self, batch, batch_idx):
+    #
+    #     predict_u = batch['u', 's', 'i'].edge_index[0]
+    #     predict_i = batch['u', 's', 'i'].edge_index[1]
+    #
+    #     predictions = self.forward(batch, predict_u, predict_i)
+    #
+    #     loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
+    #
+    #     self.log('val/MAP', MAP,)
+    #
+    #     self.log('val/loss', loss)
+    #     self.log('val/n_customers', float(batch['u'].code.shape[0]))
+    #     self.log('val/n_articles', float(batch['i'].code.shape[0]))
+    #     self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
+    #     self.log('val/time', time.time())
+    #     return loss
 
     # def validation_epoch_end(self, validation_step_outputs):
     #     """

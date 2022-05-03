@@ -209,14 +209,14 @@ class TemporalDataset(Dataset):
         for chunks in zip(*zippers):
             yield self.make_split(chunks)
 
-    def train_dataloader(self):
+    def train_datal(self):
         yield from self.roll(self.timesteps[:-self.test_splits - self.val_splits])
 
-    def val_dataloader(self):
+    def val_datal(self):
         yield from self.roll(
             self.timesteps[-self.embedding_chunks - self.val_splits - self.test_splits: -self.test_splits])
 
-    def test_dataloader(self):
+    def test_data(self):
         yield from self.roll(self.timesteps[-self.embedding_chunks - self.test_splits:])
 
     def __len__(self):
