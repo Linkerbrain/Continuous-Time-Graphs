@@ -2,6 +2,7 @@ import argparse
 import logging
 
 import torch
+import pytorch_lightning
 from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
 
@@ -51,8 +52,8 @@ def make_datalaoders(graph, params):
 
 
 def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen):
-    if params.model == 'DGSD':
-        raise NotImplementedError()
+    if params.model == 'DGSR':
+        model = models.dgsr.DGSR(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'GAT':
         model = models.gat.GAT(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
