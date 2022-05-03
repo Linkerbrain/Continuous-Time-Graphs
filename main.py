@@ -5,14 +5,16 @@ import torch
 from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
 
-import sgat.models.gat
-import sgat.models.dgsr
-from sgat import data, graphs, models
+from sgat import data, graphs, models, Task, task
 
 import pytorch_lightning as pl
 
 from sgat import logger
+from sgat.graphs import numpy_to_torch
+from sgat.models import mh
 
+
+@task('Making dataset')
 def make_dataset(params):
     if params.dataset in data.AMAZON_DATASETS:
         if params.days is not None:
@@ -27,17 +29,17 @@ def make_dataset(params):
 
     # mutates graph
     graphs.add_transaction_order(graph)
-
     return graph
 
 
+@task('Making data loaders')
 def make_datalaoders(graph, params):
     if params.sampler == 'periodic':
         temporal_ds = graphs.TemporalDataset(graph, params)
 
-        train_dataloader = list(temporal_ds.train_dataloader())
-        val_dataloader = list(temporal_ds.val_dataloader())
-        test_dataloader = list(temporal_ds.test_dataloader())
+        train_dataloader = list(numpy_to_torch(temporal_ds.train_dataloader()))
+        val_dataloader = list(numpy_to_torch(temporal_ds.val_dataloader()))
+        test_dataloader = list(numpy_to_torch(temporal_ds.test_dataloader()))
     elif params.sampler == 'ordered':
         raise NotImplementedError()
     else:
@@ -50,11 +52,12 @@ def make_datalaoders(graph, params):
     return train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
 
 
+@task('Making model')
 def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen):
     if params.model == 'DGSD':
         raise NotImplementedError()
-    elif params.model == 'GAT':
-        model = models.gat.GAT(graph, params, train_dataloader_gen, val_dataloader_gen)
+    elif params.model == 'MH':
+        model = models.mh.MH(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
         raise NotImplementedError()
     return model
@@ -98,25 +101,25 @@ def main(params):
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
-                         log_every_n_steps=50, check_val_every_n_epoch=10, callbacks=[checkpoint_callback],
+                         log_every_n_steps=1, check_val_every_n_epoch=10, callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
                          strategy=DDPStrategy(find_unused_parameters=False,
                                               static_graph=True) if params.devices > 1 else None)
 
     if not params.notrain:
-        logger.info('Training model...')
+        task = Task('Training model').start()
         trainer.fit(model)
-        logger.info('Done')
+        task.done()
 
     if not params.novalidate:
-        logger.info('Validating model...')
+        task = Task('Validating model').start()
         trainer.validate(model)
-        logger.info('Done')
+        task.done()
 
     if not params.notest:
-        logger.info('Testing model...')
+        task = Task('Testing model').start()
         trainer.test(model, test_dataloader_gen(model.current_epoch))
-        logger.info('Done')
+        task.done()
 
     # For interactive sessions/debugging
     return locals()
@@ -138,7 +141,7 @@ if __name__ == "__main__":
     # parser_train.add_argument('--model', type=str, default='DGSR', choices={'DGSR', "GAT"})
     parser_train.add_argument('--days', type=int, default=None, help='subset of the data to train and test with')
     parser_train.add_argument('--epochs', type=int, default=1000)
-    parser_train.add_argument('--batch_size', type=int, default=128)
+    # parser_train.add_argument('--batch_size', type=int, default=128)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
@@ -160,10 +163,10 @@ if __name__ == "__main__":
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     graphs.TemporalDataset.add_args(parser_periodic)
 
-    parser_gat = model_subparser.add_parser('GAT')
-    models.gat.GAT.add_args(parser_gat)
+    parser_mh = model_subparser.add_parser('MH')
+    models.mh.MH.add_args(parser_mh)
 
-    gat_sampler_subparser = parser_gat.add_subparsers(dest='sampler')
+    gat_sampler_subparser = parser_mh.add_subparsers(dest='sampler')
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     graphs.TemporalDataset.add_args(parser_periodic)

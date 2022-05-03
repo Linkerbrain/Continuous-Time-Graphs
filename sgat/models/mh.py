@@ -12,7 +12,7 @@ def cmp_loss(pred, label):
     positives = pred[label]
     return torch.mean(negatives[:, None] - positives[None, :])
 
-class GAT(SgatModule):
+class MH(SgatModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_vocab_num = self.graph['u'].code.shape[0]
@@ -29,12 +29,12 @@ class GAT(SgatModule):
         current_size = 0
         for i in range(self.params.conv_layers):
             self.convs.add_module(f"sage_layer_{i}", HeteroConv({
-                ('c', 'b', 'a'): SAGEConv(-1, self.params.embedding_size),
-                ('a', 'rev_b', 'c'): SAGEConv(-1, self.params.embedding_size),
+                ('u', 'b', 'i'): SAGEConv(-1, self.params.embedding_size),
+                ('i', 'rev_b', 'u'): SAGEConv(-1, self.params.embedding_size),
             }))
 
         # for the dot product at the end between the complete customer embedding and a candidate article
-        self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * self.params.conv_layers)
+        self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * (self.params.conv_layers+1))
 
         if self.params.activation is None:
             self.activation = lambda x: x
@@ -56,13 +56,19 @@ class GAT(SgatModule):
         parser.add_argument('--conv_layers', type=int, default=4)
         parser.add_argument('--activation', type=str, default=None)
         parser.add_argument('--dropout', type=float, default=0.25)
+        parser.add_argument('--loss_fn', type=str, default='bce')
 
     def forward(self, graph, predict_u, predict_i):
 
         # TODO: Add node features
         x_dict = {
-            'u': self.user_embedding[graph['u'].code],
-            'i': self.item_embedding[graph['i'].code]
+            'u': self.user_embedding(graph['u'].code),
+            'i': self.item_embedding(graph['i'].code)
+        }
+
+        edge_index_dict = {
+            ('u', 'b', 'i'): graph['u', 'b', 'i'].edge_index,
+            ('i', 'rev_b', 'u'): graph['u', 'b', 'i'].edge_index.flip(dims=(0,))
         }
 
         # TODO: edge_attr_dict with positional embeddings and such for GAT
@@ -70,7 +76,7 @@ class GAT(SgatModule):
         # TODO: Treat articles and users symmetrically: get layered embedding for both
         layered_embeddings_u = [x_dict['u']]
         for conv in self.convs:
-            x_dict = conv(x_dict, graph.edge_index_dict)
+            x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: self.activation(x) for key, x in x_dict.items()}
 
             layered_embeddings_u.append(x_dict['u'])
@@ -78,75 +84,71 @@ class GAT(SgatModule):
 
         # Grab the embeddings of the users and items who we will predict for
         layered_embeddings_u = layered_embeddings_u[predict_u]
-        embeddings_i = self.item_embedding[predict_i]
+        embeddings_i = self.item_embedding(predict_i)
 
-        predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
+        # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
+        predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
 
         return torch.sigmoid(predictions)
 
 
     def training_step(self, batch, batch_idx):
-        embedding_graph, supervision_graph = batch
 
-        edges = supervision_graph['u', 'b', 'i']
+        predict_u = batch['u', 's', 'i'].edge_index[0]
+        predict_i = batch['u', 's', 'i'].edge_index[1]
 
-        # ptr is like edge_index but it uses the indices in the embedding_graph
-        predict_u = edges.ptr[0]
-        predict_i = edges.ptr[1]
+        predictions = self.forward(batch, predict_u, predict_i)
 
-        predictions = self.forward(embedding_graph, predict_u, predict_i)
-
-        loss = self.loss_fn(predictions, edges.label)
+        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
 
         self.log('train/loss', loss, on_step=True)
-        self.log('train/n_customers', float(embedding_graph['u'].code.shape[0]))
-        self.log('train/n_articles', float(embedding_graph['i'].code.shape[0]))
-        self.log('train/n_transactions', float(embedding_graph['u', 'b', 'i'].code.shape[0]))
+        self.log('train/n_customers', float(batch['u'].code.shape[0]))
+        self.log('train/n_articles', float(batch['i'].code.shape[0]))
+        self.log('train/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
         self.log('train/time', time.time())
         return loss
 
     def validation_step(self, batch, batch_idx):
-        embedding_graph, supervision_graph = batch
 
-        predict_u = supervision_graph['u', 'b', 'i'].edge_index[0]
-        predict_i = supervision_graph['u', 'b', 'i'].edge_index[1]
+        predict_u = batch['u', 's', 'i'].edge_index[0]
+        predict_i = batch['u', 's', 'i'].edge_index[1]
 
-        predictions = self.forward(embedding_graph, predict_u, predict_i)
+        predictions = self.forward(batch, predict_u, predict_i)
 
-        loss = self.loss_fn(predictions, supervision_graph['u', 'b', 'i'].label)
+        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
 
         self.log('val/MAP', MAP,)
 
         self.log('val/loss', loss)
-        self.log('val/n_customers', float(embedding_graph['u'].code.shape[0]))
-        self.log('val/n_articles', float(embedding_graph['i'].code.shape[0]))
-        self.log('val/n_transactions', float(embedding_graph['u', 'b', 'i'].code.shape[0]))
+        self.log('val/n_customers', float(batch['u'].code.shape[0]))
+        self.log('val/n_articles', float(batch['i'].code.shape[0]))
+        self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
         self.log('val/time', time.time())
         return loss
 
-    def validation_epoch_end(self, validation_step_outputs):
-        """
-            Collects all results from validation batches into a predictions_df, and evaluates the predictions using
-            the framework
-        :param validation_step_outputs:
-        :return:
-        """
-        top12 = torch.cat(list(v[0] for v in validation_step_outputs)).cpu().numpy()
-        customers = torch.cat(list(v[1] for v in validation_step_outputs)).cpu().numpy()
-
-        customers_df = self.framework.get_customers_data()
-        articles_df = self.framework.get_articles_data()
-
-        top12 = articles_df['article_id'].to_numpy()[top12]
-        customers = customers_df['customer_id'].to_numpy()[customers]
-
-        predictions_df = pd.DataFrame({"customer_id": customers, "pred": list(list(v) for v in top12)})
-
-        scores = self.framework.evaluate(predictions_df) if not self.analyze else self.framework.analyze(predictions_df,
-                                                                                                         sample_users=self.analyze)
-        self.logger.log_model_summary(model=self, max_depth=-1)
-        for k, v in scores.items():
-            self.log(str(k), float(v))
+    # def validation_epoch_end(self, validation_step_outputs):
+    #     """
+    #         Collects all results from validation batches into a predictions_df, and evaluates the predictions using
+    #         the framework
+    #     :param validation_step_outputs:
+    #     :return:
+    #     """
+    #     top12 = torch.cat(list(v[0] for v in validation_step_outputs)).cpu().numpy()
+    #     customers = torch.cat(list(v[1] for v in validation_step_outputs)).cpu().numpy()
+    #
+    #     customers_df = self.framework.get_customers_data()
+    #     articles_df = self.framework.get_articles_data()
+    #
+    #     top12 = articles_df['article_id'].to_numpy()[top12]
+    #     customers = customers_df['customer_id'].to_numpy()[customers]
+    #
+    #     predictions_df = pd.DataFrame({"customer_id": customers, "pred": list(list(v) for v in top12)})
+    #
+    #     scores = self.framework.evaluate(predictions_df) if not self.analyze else self.framework.analyze(predictions_df,
+    #                                                                                                      sample_users=self.analyze)
+    #     self.logger.log_model_summary(model=self, max_depth=-1)
+    #     for k, v in scores.items():
+    #         self.log(str(k), float(v))
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
