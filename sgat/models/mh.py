@@ -84,7 +84,7 @@ class MH(SgatModule):
 
         # Grab the embeddings of the users and items who we will predict for
         layered_embeddings_u = layered_embeddings_u[predict_u]
-        embeddings_i = self.item_embedding(predict_i)
+        embeddings_i = x_dict['i'][predict_i]
 
         # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
         predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
