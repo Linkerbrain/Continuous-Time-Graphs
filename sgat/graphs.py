@@ -38,6 +38,7 @@ def numpy_to_torch(data):
         else:
             yield graph
 
+
 def check_graph(graph):
     for k in graph.edge_types:
         for attribute, value in graph[k].items():
@@ -120,6 +121,9 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
         subdata['i'][k] = v[articles]
 
     for edge_type in data.edge_types:
+        # Skip the filtered edge as it has already been done
+        if edge_type == forward:
+            continue
         # Make the edges point to the smaller set of users/items
         # And remove edges that no longer point to valid nodes
         e0_ma = npi.indices(customers if edge_type[0] == 'u' else articles,
@@ -131,6 +135,12 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
         edge_index[0] = e0_ma.data[all_present]
         edge_index[1] = e1_ma.data[all_present]
         subdata[edge_type].edge_index = edge_index
+
+        # Also update all the edge fields
+        for k, v in data[edge_type].items():
+            if k != 'edge_index':
+                subdata[edge_type][k] = v[all_present]
+
     if not inplace:
         return subdata
 
@@ -213,6 +223,7 @@ class TemporalDataset(Dataset):
         supervision_graph = make_subset(self.graph,
                                         filter_transactions=np.bitwise_or.reduce(chunks[self.embedding_chunks:]))
 
+        import pdb; pdb.set_trace()
         # noinspection PyUnreachableCode
         if True:  # TODO: Add as option to remove or not cold starts
             # Remove cold starts
@@ -268,12 +279,15 @@ class TemporalDataset(Dataset):
         for chunks in zip(*zippers):
             yield self.make_split(chunks)
 
-    def train_datal(self):
-        yield from self.roll(self.timesteps[:-self.test_splits - self.val_splits])
+    def train_data(self):
+        yield from self.roll(self.timesteps[:-self.test_splits - self.val_splits
+        if self.test_splits + self.val_splits > 0 else len(self.timesteps)])
 
-    def val_datal(self):
+    def val_data(self):
         yield from self.roll(
-            self.timesteps[-self.embedding_chunks - self.val_splits - self.test_splits: -self.test_splits])
+            self.timesteps[
+                -self.embedding_chunks - self.val_splits - self.test_splits:
+                -self.test_splits if self.test_splits > 0 else len(self.timesteps)])
 
     def test_data(self):
         yield from self.roll(self.timesteps[-self.embedding_chunks - self.test_splits:])

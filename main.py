@@ -55,8 +55,8 @@ def make_datalaoders(graph, params):
         temporal_ds = graphs.TemporalDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        train_data = PrecomputedDataset(temporal_ds.train_datal(), shuffle=not params.noshuffle)
-        val_data = PrecomputedDataset(temporal_ds.val_datal(), shuffle=not params.noshuffle)
+        train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle)
+        val_data = PrecomputedDataset(temporal_ds.val_data(), shuffle=not params.noshuffle)
         test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
     elif params.sampler == 'ordered':
         raise NotImplementedError()
