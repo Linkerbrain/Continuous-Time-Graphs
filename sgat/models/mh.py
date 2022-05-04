@@ -89,6 +89,7 @@ class MH(SgatModule):
         # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
         predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
 
+        import pdb; pdb.set_trace()
         return torch.sigmoid(predictions)
 
 

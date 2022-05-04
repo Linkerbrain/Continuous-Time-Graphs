@@ -38,6 +38,17 @@ def numpy_to_torch(data):
         else:
             yield graph
 
+def check_graph(graph):
+    for k in graph.edge_types:
+        for attribute, value in graph[k].items():
+            s = k[0]
+            t = k[-1]
+            if attribute == 'edge_index' and value[0].max() > graph[s].code.shape[0]:
+                return False
+            if attribute == 'edge_index' and value[1].max() > graph[t].code.shape[0]:
+                return False
+    return True
+
 
 def compare_graphs(graph1, graph2, one_way=False):
     for k in graph1.node_types + graph1.edge_types:
@@ -48,8 +59,10 @@ def compare_graphs(graph1, graph2, one_way=False):
         return compare_graphs(graph2, graph1, True)
     return True
 
+
 def nodes_codified(graph, node_type):
     return graph[node_type].code
+
 
 def edges_codified(graph, edge_type):
     edges = np.zeros_like(graph[edge_type].edge_index, dtype=np.int64)
@@ -108,10 +121,16 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
 
     for edge_type in data.edge_types:
         # Make the edges point to the smaller set of users/items
-        subdata[edge_type].edge_index[0] = npi.indices(customers if edge_type[0] == 'u' else articles,
-                                                       subdata[edge_type].edge_index[0])
-        subdata[edge_type].edge_index[1] = npi.indices(articles if edge_type[-1] == 'i' else customers,
-                                                       subdata[edge_type].edge_index[1])
+        # And remove edges that no longer point to valid nodes
+        e0_ma = npi.indices(customers if edge_type[0] == 'u' else articles,
+                            subdata[edge_type].edge_index[0], missing='mask')
+        e1_ma = npi.indices(articles if edge_type[-1] == 'i' else customers,
+                            subdata[edge_type].edge_index[1], missing='mask')
+        all_present = ~e0_ma.mask & ~e1_ma.mask
+        edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
+        edge_index[0] = e0_ma.data[all_present]
+        edge_index[1] = e1_ma.data[all_present]
+        subdata[edge_type].edge_index = edge_index
     if not inplace:
         return subdata
 
@@ -157,6 +176,7 @@ class TemporalDataset(Dataset):
         self.val_splits = params.val_splits
         self.test_splits = params.test_splits
         self.skip_chunks = params.skip_chunks
+        self.hops = params.hops
 
         self.graph = graph
 
@@ -182,10 +202,10 @@ class TemporalDataset(Dataset):
         parser.add_argument('--test_splits', type=int, default=0)
         parser.add_argument('--skip_chunks', type=int, default=0, help="Skip the first n chunks")
         parser.add_argument('--negative_examples_ratio', type=float, default=1.0)
+        parser.add_argument('--hops', type=int, default=3)
 
     # noinspection PyTypeChecker
     def make_split(self, chunks):
-        # TODO: Resample embedding_graph to the local neighborhood of users in the supervision graph
 
         embedding_graph = make_subset(self.graph,
                                       filter_transactions=np.bitwise_or.reduce(chunks[:self.embedding_chunks]))
@@ -234,7 +254,10 @@ class TemporalDataset(Dataset):
         s.label = np.ones(s.edge_index.shape[1], dtype=np.float)
         s.label[-fake_edges.shape[1]:] = 0
 
-        return embedding_graph
+        # Resample embedding_graph to the local neighborhood of users in the supervision graph
+        sampled_graph = sample_neighbourhood(embedding_graph, supervision_graph['u'].ptr, self.hops)
+
+        return sampled_graph
 
     def roll(self, timesteps):
         """ Do a rolling window over te time steps given and split into embedding graph and supervision graph"""

@@ -5,7 +5,7 @@ from torch_geometric.loader.utils import filter_hetero_data
 import numpy_indexed as npi
 
 from sgat.data import amazon_dataset
-from sgat.graphs import sample_neighbourhood, compare_graphs, edges_codified
+from sgat.graphs import sample_neighbourhood, compare_graphs, edges_codified, check_graph
 
 GRAPH = amazon_dataset('beauty')
 
@@ -32,3 +32,7 @@ def test_sample_neighbourhood():
 
     assert npi.contains(resampled['u'].code, sampled2['u'].code).all()
     assert npi.contains(resampled['i'].code, sampled2['i'].code).all()
+
+    assert check_graph(sampled)
+    assert check_graph(resampled)
+    assert check_graph(sampled2)
