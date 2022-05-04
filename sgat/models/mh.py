@@ -102,6 +102,7 @@ class MH(SgatModule):
 
         loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
 
+
         self.log('train/loss', loss, on_step=True)
         self.log('train/n_customers', float(batch['u'].code.shape[0]))
         self.log('train/n_articles', float(batch['i'].code.shape[0]))
@@ -109,35 +110,35 @@ class MH(SgatModule):
         self.log('train/time', time.time())
         return loss
 
-    def validation_step(self, batch, batch_idx):
-
-        supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
-        supervised_predict_i = batch['u', 's', 'i'].edge_index[1]
-
-        supervised_predictions = self.forward(batch, supervised_predict_u, supervised_predict_i)
-
-        loss = self.loss_fn(supervised_predictions, batch['u', 's', 'i'].label)
-
-        neighbour_predict_u = batch['u', 'n', 'i'].edge_index[0]
-        neighbour_predict_i = batch['u', 'n', 'i'].edge_index[1]
-
-        neighbour_predictions = self.forward(batch, neighbour_predict_u, neighbour_predict_i)
-
-        df = pd.DataFrame(columns={'u': neighbour_predict_u.numpy(), 'i': neighbour_predict_i, 'p': neighbour_predictions.numpy()})
-        # df.groupby(by='u').apply(lambda x: x.sort_values(by='p', ascending=False).head(self.params.K))
-        # df.sort_values(by='p', ascending=False).groupby('u')
-        topK = df.groupby(by='u').nlargest(n=self.params.K)
-
-        import pdb; pdb.set_trace()
-
-        self.log('val/MAP', MAP,)
-
-        self.log('val/loss', loss)
-        self.log('val/n_customers', float(batch['u'].code.shape[0]))
-        self.log('val/n_articles', float(batch['i'].code.shape[0]))
-        self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
-        self.log('val/time', time.time())
-        return loss
+    # def validation_step(self, batch, batch_idx):
+    #
+    #     supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
+    #     supervised_predict_i = batch['u', 's', 'i'].edge_index[1]
+    #
+    #     supervised_predictions = self.forward(batch, supervised_predict_u, supervised_predict_i)
+    #
+    #     loss = self.loss_fn(supervised_predictions, batch['u', 's', 'i'].label)
+    #
+    #     neighbour_predict_u = batch['u', 'n', 'i'].edge_index[0]
+    #     neighbour_predict_i = batch['u', 'n', 'i'].edge_index[1]
+    #
+    #     neighbour_predictions = self.forward(batch, neighbour_predict_u, neighbour_predict_i)
+    #
+    #     df = pd.DataFrame(columns={'u': neighbour_predict_u.numpy(), 'i': neighbour_predict_i, 'p': neighbour_predictions.numpy()})
+    #     # df.groupby(by='u').apply(lambda x: x.sort_values(by='p', ascending=False).head(self.params.K))
+    #     # df.sort_values(by='p', ascending=False).groupby('u')
+    #     topK = df.groupby(by='u').nlargest(n=self.params.K)
+    #
+    #     import pdb; pdb.set_trace()
+    #
+    #     self.log('val/MAP', MAP,)
+    #
+    #     self.log('val/loss', loss)
+    #     self.log('val/n_customers', float(batch['u'].code.shape[0]))
+    #     self.log('val/n_articles', float(batch['i'].code.shape[0]))
+    #     self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
+    #     self.log('val/time', time.time())
+    #     return loss
 
     # def validation_epoch_end(self, validation_step_outputs):
     #     """

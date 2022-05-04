@@ -112,6 +112,7 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
         if k != 'edge_index':
             subdata[forward][k] = v[filter_transactions]
 
+    # Index = new, Value = old index
     customers = np.unique(subdata[forward].edge_index[0])
     articles = np.unique(subdata[forward].edge_index[1])
 
@@ -120,16 +121,20 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
     for k, v in data['i'].items():
         subdata['i'][k] = v[articles]
 
+    # Make the forward edges point to the smaller set of users/items
+    subdata[forward].edge_index[0] = npi.indices(customers, subdata[forward].edge_index[0])
+    subdata[forward].edge_index[1] = npi.indices(articles, subdata[forward].edge_index[1])
+
     for edge_type in data.edge_types:
-        # Skip the filtered edge as it has already been done
+        # Filtered edges are already dealt with in a different way
         if edge_type == forward:
             continue
         # Make the edges point to the smaller set of users/items
         # And remove edges that no longer point to valid nodes
         e0_ma = npi.indices(customers if edge_type[0] == 'u' else articles,
-                            subdata[edge_type].edge_index[0], missing='mask')
+                            data[edge_type].edge_index[0], missing='mask')
         e1_ma = npi.indices(articles if edge_type[-1] == 'i' else customers,
-                            subdata[edge_type].edge_index[1], missing='mask')
+                            data[edge_type].edge_index[1], missing='mask')
         all_present = ~e0_ma.mask & ~e1_ma.mask
         edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
         edge_index[0] = e0_ma.data[all_present]
@@ -223,7 +228,6 @@ class TemporalDataset(Dataset):
         supervision_graph = make_subset(self.graph,
                                         filter_transactions=np.bitwise_or.reduce(chunks[self.embedding_chunks:]))
 
-        import pdb; pdb.set_trace()
         # noinspection PyUnreachableCode
         if True:  # TODO: Add as option to remove or not cold starts
             # Remove cold starts
@@ -246,6 +250,7 @@ class TemporalDataset(Dataset):
             (supervision_graph['u'].ptr[b.edge_index[0]], supervision_graph['i'].ptr[b.edge_index[1]]),
             axis=0
         )
+
 
         # Fake edges added as negative examples
         fake_edges = np.zeros_like(b.ptr)
