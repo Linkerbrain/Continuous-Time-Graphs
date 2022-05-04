@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pandas as pd
 import torch
@@ -37,8 +39,27 @@ def numpy_to_torch(data):
             yield graph
 
 
+def compare_graphs(graph1, graph2, one_way=False):
+    for k in graph1.node_types + graph1.edge_types:
+        for attribute, value in graph1[k].items():
+            if np.all(graph2[k][attribute] != value):
+                return False
+    if not one_way:
+        return compare_graphs(graph2, graph1, True)
+    return True
+
+def nodes_codified(graph, node_type):
+    return graph[node_type].code
+
+def edges_codified(graph, edge_type):
+    edges = np.zeros_like(graph[edge_type].edge_index, dtype=np.int64)
+    edges[0, :] = graph[edge_type[0]].code[graph[edge_type].edge_index[0, :]]
+    edges[1, :] = graph[edge_type[-1]].code[graph[edge_type].edge_index[1, :]]
+    return edges
+
+
 # noinspection PyTypeChecker
-def make_subset(data, filter_transactions=None, filter_customers=None, filter_articles=None):
+def make_subset(data, filter_transactions=None, filter_customers=None, filter_articles=None, inplace=False):
     """
 
     Args:
@@ -50,7 +71,10 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
     Returns:
 
     """
-    subdata = HeteroData()
+    if not inplace:
+        subdata = HeteroData()
+    else:
+        subdata = data
 
     forward = ('u', 'b', 'i')
 
@@ -82,31 +106,51 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
     for k, v in data['i'].items():
         subdata['i'][k] = v[articles]
 
-    # Make the edges point to the smaller set of users/items
-    subdata[forward].edge_index[0] = npi.indices(customers, subdata[forward].edge_index[0])
-    subdata[forward].edge_index[1] = npi.indices(articles, subdata[forward].edge_index[1])
+    for edge_type in data.edge_types:
+        # Make the edges point to the smaller set of users/items
+        subdata[edge_type].edge_index[0] = npi.indices(customers if edge_type[0] == 'u' else articles,
+                                                       subdata[edge_type].edge_index[0])
+        subdata[edge_type].edge_index[1] = npi.indices(articles if edge_type[-1] == 'i' else customers,
+                                                       subdata[edge_type].edge_index[1])
+    if not inplace:
+        return subdata
 
-    return subdata
+
+def sample_neighbourhood(graph, roots, hops):
+    edges = graph['u', 'b', 'i']
+    return sample_neighbourhood_(graph, 'u', roots, roots, hops, np.zeros(edges.code.shape[0], dtype=bool), [])
+
+
+# noinspection PyTypeChecker
+def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, mask, neighbours):
+    if hops == 0:
+        subgraph = copy.deepcopy(graph)
+        subgraph['u', 'n', 'i'].edge_index = np.concatenate(neighbours[0::2], axis=1)
+        subgraph['u', 'n', 'u'].edge_index = np.concatenate(neighbours[1::2], axis=1)
+        make_subset(subgraph, filter_transactions=mask, inplace=True)
+        return subgraph
+
+    edges = graph['u', 'b', 'i']
+
+    # & ~mask is to not backtrack
+    dmask = np.isin(edges.edge_index[0 if node_type == 'u' else 1], root_targets) & ~mask
+
+    # root_sources = ...
+    # root_targets = root_targets
+
+    sources = edges.edge_index[0 if node_type == 'u' else 1, dmask]  # Same as root_targets but bigger
+    targets = edges.edge_index[1 if node_type == 'u' else 0, dmask]
+
+    new_root_sources = root_sources[npi.indices(root_targets, sources)]
+    new_neighbours = neighbours + [np.stack((new_root_sources, targets), axis=0)]
+
+    return sample_neighbourhood_(graph, 'i' if node_type == 'u' else 'u', new_root_sources, targets, hops - 1,
+                                 mask | dmask, new_neighbours)
 
 
 class TemporalDataset(Dataset):
     # noinspection PyTypeChecker
     def __init__(self, graph, params):
-        # chunk_size=7, embedding_chunks=4, supervision_chunks=1, val_splits=2,
-        #          test_splits=0,
-        #          negative_examples_ratio=1.0):
-        """
-        Step 0 (this class): Iterate over weeks of the data
-        Step 1: Make a rolling dataset of the "past" as weeks progress, with the current week as target
-        Step 2: For each timestep, make a neighbourloader for every customer that bought anything in the target week
-                Neighbourloader can be biased towards recent transactions (n-latest transactions from user)
-                Also an idea: Make neighbourloader iterate over similar customers based on their features or embeddings
-                so that batches contain mostly related customers. This would definetly help with cold-starting
-        Step 3: Train SageNet on predicting target week purchases based on neighbourloader samples.
-                Multiple neighbourloader rounds can be done per timestep (one round goes through all customers)
-
-        This model would likely take days if not weeks to train fully
-        """
         self.chunk_size = params.chunk_size
         self.embedding_chunks = params.embedding_chunks
         self.supervision_chunks = params.supervision_chunks
@@ -121,16 +165,10 @@ class TemporalDataset(Dataset):
 
         t = graph['u', 'b', 'i'].t
 
-        # if np.issubdtype(t.dtype, np.datetime64):
-        #     # week = t.floor(pd.Timedelta(chunk_days, 'D'))
-        #     chunk = np.floor_divide(t, pd.Timedelta(chunk_size, 'D'))
-        # else:
         chunk = np.floor_divide(t, self.chunk_size)
         timesteps = []
         for w in np.unique(chunk)[self.skip_chunks:]:
             subset = chunk == w  # ordering of transactions and edges on data is the same
-            # subdata = make_subset(data, filter_transactions=subset)
-            # timesteps.append(subdata)
             timesteps.append(subset)
         self.timesteps = list(timesteps)
 
@@ -195,8 +233,6 @@ class TemporalDataset(Dataset):
 
         s.label = np.ones(s.edge_index.shape[1], dtype=np.float)
         s.label[-fake_edges.shape[1]:] = 0
-
-
 
         return embedding_graph
 

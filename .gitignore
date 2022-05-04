@@ -7,3 +7,4 @@ venv
 keys.sh
 hm
 .neptune
+*.egg-info
