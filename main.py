@@ -19,6 +19,8 @@ from sgat.simple_dataloader import SimpleDataLoaders
 from sgat.models import mh
 from sgat.models import dgsr
 
+from sgat.no_traceback import no_traceback
+
 class PrecomputedDataset(Iterable, Sized):
     def __init__(self, batches, shuffle=True):
         self.batches = list(numpy_to_torch(batches))
@@ -202,4 +204,6 @@ if __name__ == "__main__":
 
     params = parser.parse_args()
 
-    r = main(params)
+    no_traceback(main, params)
+
+    # r = main(params)
