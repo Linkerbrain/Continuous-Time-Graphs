@@ -151,8 +151,8 @@ class HMData(object):
         data['i'].code = np.arange(self.farticles.shape[0])  # farticles.index.to_numpy())
         data['u', 'b', 'i'].code = np.arange(self.ftransactions.shape[0])
 
-        # Rich date information
-        data['u', 'b', 'i'].dates = self.df_transactions["date"].to_numpy()
+        # # Rich date information
+        # data['u', 'b', 'i'].dates = self.df_transactions["date"].to_numpy()
 
         # Day numbers since unix epoch
         data['u', 'b', 'i'].t = (self.df_transactions["date"] - np.datetime64('1970')).dt.days.to_numpy()

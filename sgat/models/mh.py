@@ -61,7 +61,7 @@ class MH(SgatModule):
         parser.add_argument('--K', type=int, default=12)
 
     def forward(self, graph, predict_u, predict_i):
-
+        print(graph)
         # TODO: Add node features
         x_dict = {
             'u': self.user_embedding(graph['u'].code),

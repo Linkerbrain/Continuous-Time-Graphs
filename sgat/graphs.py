@@ -7,6 +7,8 @@ from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
 import numpy_indexed as npi
 
+from sgat import logger
+
 
 def numpy_to_torch(data):
     """
