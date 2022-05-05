@@ -57,9 +57,9 @@ def no_traceback(func, params):
         for i, a in enumerate(data[1:-1:2]):
             print_file_line(data[i], data[i+1])
 
-        print()
+        print(flush=True)
         print_error_line(data[-1])
-        print(e)
+        print(e, flush=True)
 
         print_border()
 
