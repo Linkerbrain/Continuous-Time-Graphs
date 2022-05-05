@@ -18,10 +18,10 @@ import colored_traceback.auto
 
 """
 lodewijk command
-python main.py --dataset beauty train --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
 python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 simple
 
-python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
 
 python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 10
 """
@@ -78,7 +78,7 @@ class DGSR(SgatModule):
 
         print("[DGSR] Succesfully initialised DGSR network")
 
-    def forward(self, batch, predict_u, predict_i):
+    def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
         u_code = batch['u'].code
         i_code = batch['i'].code
         edge_index = batch[('u', 'b', 'i')].edge_index
@@ -121,7 +121,12 @@ class DGSR(SgatModule):
 
         # get u embeddings and i embeddings (2 lists that belong elementwise, contain duplicates)
         predict_u_graph_embed = torch.hstack(hu_list)[predict_u]
-        predict_i_embed = self.wP(hi_list[0])[predict_i]
+
+        # check if predict i are indices or codes
+        if predict_i_ptr:
+            predict_i_embed = self.wP(hi_list[0])[predict_i]
+        else:
+            predict_i_embed = self.wP(self.item_embedding(predict_i))
 
         # get the dot product of each element
         scores = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)

@@ -4,6 +4,8 @@ import torch
 import pandas as pd
 import pytorch_lightning as pl
 
+from sgat.evaluation import mean_average_precision
+
 class SgatModule(pl.LightningModule):
     def __init__(self, graph, params, train_dataloader_gen, val_dataloader_gen):
         super(SgatModule, self).__init__()
@@ -54,19 +56,33 @@ class SgatModule(pl.LightningModule):
         # backward
         loss = self.loss_fn(supervised_predictions, batch['u', 's', 'i'].label)
     
-        # neighbour_predict_u = batch['u', 'n', 'i'].edge_index[0]
-        # neighbour_predict_i = batch['u', 'n', 'i'].edge_index[1]
+        # COMPUTE MAP
+        map_predict_u = batch['u', 'n', 'i'].edge_index[0]
+        map_predict_i = batch['u', 'n', 'i'].edge_index[1]
+
+        # make predictions
+        map_predictions = self.forward(batch, map_predict_u, map_predict_i)
+
+        # get top k predictions (could be optimized)
+        df = pd.DataFrame({
+            'u': map_predict_u.numpy(),
+            'i': map_predict_i.numpy(),
+            'p': map_predictions.numpy()})
+
+        y_pred = []
+        for u, ip in df.groupby("u"):
+            y_pred.append(ip.nlargest(12, 'p')['i'].values)
+
+        df2 = pd.DataFrame({
+            'u' : supervised_predict_u,
+            'i' : supervised_predict_i,
+        })
+
+        y_true = []
+        for u, i in df2.groupby("u"):
+            y_true.append(i['i'].values)
     
-        # neighbour_predictions = self.forward(batch, neighbour_predict_u, neighbour_predict_i)
-    
-        # df = pd.DataFrame(columns={'u': neighbour_predict_u.numpy(), 'i': neighbour_predict_i, 'p': neighbour_predictions.numpy()})
-        # # df.groupby(by='u').apply(lambda x: x.sort_values(by='p', ascending=False).head(self.params.K))
-        # # df.sort_values(by='p', ascending=False).groupby('u')
-        # topK = df.groupby(by='u').nlargest(n=self.params.K)
-    
-        # import pdb; pdb.set_trace()
-    
-        MAP = 0.0
+        MAP = mean_average_precision(y_true, y_pred, k=12)
 
         self.log('val/MAP', MAP, batch_size=len(supervised_predict_u))
     

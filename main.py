@@ -122,7 +122,7 @@ def main(params):
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
-                         log_every_n_steps=1, check_val_every_n_epoch=1, callbacks=[checkpoint_callback],
+                         log_every_n_steps=1, check_val_every_n_epoch=5, callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
                          strategy=DDPStrategy(find_unused_parameters=False,
                                               static_graph=True) if params.devices > 1 else None)

@@ -182,6 +182,12 @@ def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, ma
                                  mask | dmask, new_neighbours)
 
 
+def add_random_eval_edges(graph, true_edges, num_items, n):
+    true_users = np.unique(true_edges[1, :])
+
+    random_items = np.random.randint(0, num_items, size=(n))
+
+
 class TemporalDataset(Dataset):
     # noinspection PyTypeChecker
     def __init__(self, graph, params):
@@ -272,6 +278,8 @@ class TemporalDataset(Dataset):
 
         # Resample embedding_graph to the local neighborhood of users in the supervision graph
         sampled_graph = sample_neighbourhood(embedding_graph, supervision_graph['u'].ptr, self.hops)
+
+        add_random_eval_edges(embedding_graph, true_edges=b.ptr, num_items=self.graph['u'].code.shape[0], n=100)
 
         return sampled_graph
 
