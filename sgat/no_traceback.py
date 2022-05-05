@@ -1,3 +1,5 @@
+import pdb
+import sys
 import traceback
 
 class b:
@@ -60,3 +62,7 @@ def no_traceback(func, params):
         print(e)
 
         print_border()
+
+        # sys.last_traceback = traceback
+        tb = sys.exc_info()[-1]
+        import pdb; pdb.post_mortem(tb)

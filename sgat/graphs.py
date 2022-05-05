@@ -253,7 +253,6 @@ class TemporalDataset(Dataset):
             axis=0
         )
 
-
         # Fake edges added as negative examples
         fake_edges = np.zeros_like(b.ptr)
         # Use same users so the model focuses on predicting what users will buy
@@ -293,14 +292,15 @@ class TemporalDataset(Dataset):
     def val_data(self):
         yield from self.roll(
             self.timesteps[
-                -self.embedding_chunks - self.val_splits - self.test_splits:
-                -self.test_splits if self.test_splits > 0 else len(self.timesteps)])
+            -self.embedding_chunks - self.val_splits - self.test_splits:
+            -self.test_splits if self.test_splits > 0 else len(self.timesteps)])
 
     def test_data(self):
         yield from self.roll(self.timesteps[-self.embedding_chunks - self.test_splits:])
 
-    def __len__(self):
-        return len(self.timesteps)
+    def train_data_len(self):
+        return len(self.timesteps) - self.test_splits - self.val_splits - self.skip_chunks\
+               - self.embedding_chunks - self.supervision_chunks + 1
 
     def __getitem__(self, idx):
         return self.timesteps[idx]

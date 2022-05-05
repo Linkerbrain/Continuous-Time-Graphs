@@ -24,8 +24,6 @@ class MH(SgatModule):
 
         self.convs = nn.Sequential()
 
-        self.convs = nn.Sequential()
-
         # current_size = input_size
         current_size = 0
         for i in range(self.params.conv_layers):
