@@ -44,8 +44,6 @@ class SgatModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        print("ATTENTION RUNNING INVALID VALIDATION THATS THE INCOMING ERROR xx")
-
         # get targets
         supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
         supervised_predict_i = batch['u', 's', 'i'].edge_index[1]
@@ -68,7 +66,7 @@ class SgatModule(pl.LightningModule):
     
         # import pdb; pdb.set_trace()
     
-        MAP = 0
+        MAP = 0.0
 
         self.log('val/MAP', MAP, batch_size=len(supervised_predict_u))
     

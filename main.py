@@ -21,12 +21,7 @@ from sgat.models import dgsr
 
 class PrecomputedDataset(Iterable, Sized):
     def __init__(self, batches, shuffle=True):
-        self.batches = []
-        for batch in batches:
-            # add_oui(batch)
-            batch = numpy_to_torch(batch)
-            self.batches.append(batch)
-
+        self.batches = list(numpy_to_torch(batches))
         self.shuffle = shuffle
 
     def __len__(self):
@@ -170,7 +165,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
-    parser_train.add_argument('--monitor', type=str, default='MAP', choices=['MAP', 'NDCG'])
+    parser_train.add_argument('--monitor', type=str, default='val/MAP', choices=['val/MAP', 'val/NDCG'])
     parser_train.add_argument('--notrain', action='store_true')
     parser_train.add_argument('--novalidate', action='store_true')
     parser_train.add_argument('--norich', action='store_true')
