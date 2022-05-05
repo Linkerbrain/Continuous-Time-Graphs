@@ -8,16 +8,14 @@ from torch_geometric.nn import HeteroConv, SAGEConv
 
 from sgat.models.sgat_module import SgatModule
 
-def cmp_loss(pred, label):
-    negatives = pred[~label]
-    positives = pred[label]
-    return torch.mean(negatives[:, None] - positives[None, :])
-
 class MH(SgatModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
+
+        # Get rid of it as I don't need it for anything else
+        del self.graph
 
         self.user_embedding = nn.Embedding(self.user_vocab_num, self.params.embedding_size)
         self.item_embedding = nn.Embedding(self.item_vocab_num, self.params.embedding_size)
@@ -42,12 +40,7 @@ class MH(SgatModule):
 
         self.dropout = nn.Dropout(self.params.dropout)
 
-        if self.params.loss_fn == 'mse':
-            self.loss_fn = nn.MSELoss(reduction='mean')
-        elif self.params.loss_fn == 'cmp':
-            self.loss_fn = cmp_loss
-        elif self.params.loss_fn == 'bce':
-            self.loss_fn = nn.BCELoss(reduction='mean')
+
 
     @staticmethod
     def add_args(parser):
@@ -55,11 +48,10 @@ class MH(SgatModule):
         parser.add_argument('--conv_layers', type=int, default=4)
         parser.add_argument('--activation', type=str, default=None)
         parser.add_argument('--dropout', type=float, default=0.25)
-        parser.add_argument('--loss_fn', type=str, default='bce')
-        parser.add_argument('--K', type=int, default=12)
 
     def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
-    
+        assert predict_i_ptr
+
         # TODO: Add node features
         x_dict = {
             'u': self.user_embedding(graph['u'].code),
@@ -93,9 +85,6 @@ class MH(SgatModule):
 
         # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
         predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
+        # predictions = torch.einsum('ij, ij->i', layered_embeddings_u, self.transform(embeddings_i))
 
         return torch.sigmoid(predictions)
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
