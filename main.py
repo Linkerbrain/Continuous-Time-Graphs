@@ -65,12 +65,12 @@ def make_dataloaders(graph, params):
         temporal_ds = graphs.TemporalDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Precomputing training set')
+        job = Task('Precomputing training set').start()
         train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle,
                                         n_batches=temporal_ds.train_data_len())
         job.done()
 
-        job = Task('Precomputing validation and testing sets')
+        job = Task('Precomputing validation and testing sets').start()
         val_data = PrecomputedDataset(temporal_ds.val_data(), shuffle=not params.noshuffle)
         test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
         job.done()

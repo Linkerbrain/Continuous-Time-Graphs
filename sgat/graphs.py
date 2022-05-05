@@ -22,24 +22,18 @@ def numpy_to_torch(data):
     Returns:
 
     """
-    for batch in data if type(data) is not HeteroData else [data]:
-        graph = HeteroData()
+    graph = HeteroData()
 
-        for k in batch.node_types + batch.edge_types:
-            for attribute, value in batch[k].items():
-                if attribute == 'edge_index':
-                    dtype = torch.long
-                elif value.dtype == np.float:
-                    dtype = torch.float
-                else:
-                    dtype = None
-                graph[k][attribute] = torch.tensor(value, dtype=dtype)
-
-        if type(data) is HeteroData:
-            return graph
-        else:
-            yield graph
-
+    for k in data.node_types + data.edge_types:
+        for attribute, value in data[k].items():
+            if attribute == 'edge_index':
+                dtype = torch.long
+            elif value.dtype == np.float:
+                dtype = torch.float
+            else:
+                dtype = None
+            graph[k][attribute] = torch.tensor(value, dtype=dtype)
+    return graph
 
 def check_graph(graph):
     for k in graph.edge_types:
