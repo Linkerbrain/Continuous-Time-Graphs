@@ -24,8 +24,6 @@ class MH(SgatModule):
 
         self.convs = nn.Sequential()
 
-        self.convs = nn.Sequential()
-
         # current_size = input_size
         current_size = 0
         for i in range(self.params.conv_layers):
@@ -61,7 +59,7 @@ class MH(SgatModule):
         parser.add_argument('--K', type=int, default=12)
 
     def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
-
+    
         # TODO: Add node features
         x_dict = {
             'u': self.user_embedding(graph['u'].code),
@@ -86,7 +84,7 @@ class MH(SgatModule):
 
         # Grab the embeddings of the users and items who we will predict for
         layered_embeddings_u = layered_embeddings_u[predict_u]
-        
+
         # check if predict i are indices or codes
         if predict_i_ptr:
             embeddings_i = x_dict['i'][predict_i]

@@ -21,9 +21,15 @@ from sgat.models import dgsr
 
 from sgat.no_traceback import no_traceback
 
+from tqdm.auto import tqdm
+
 class PrecomputedDataset(Iterable, Sized):
-    def __init__(self, batches, shuffle=True):
-        self.batches = list(numpy_to_torch(batches))
+    def __init__(self, batches, shuffle=True, n_batches=None):
+        self.batches = []
+        for batch in tqdm(batches, total=n_batches):
+            # add_oui(batch)
+            batch = numpy_to_torch(batch)
+            self.batches.append(batch)
         self.shuffle = shuffle
 
     def __len__(self):
@@ -33,6 +39,7 @@ class PrecomputedDataset(Iterable, Sized):
         if self.shuffle:
             random.shuffle(self.batches)
         return iter(self.batches)
+
 
 @task('Making dataset')
 def make_dataset(params):
@@ -58,9 +65,16 @@ def make_dataloaders(graph, params):
         temporal_ds = graphs.TemporalDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle)
+        job = Task('Precomputing training set').start()
+        train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle,
+                                        n_batches=temporal_ds.train_data_len())
+        job.done()
+
+        job = Task('Precomputing validation and testing sets').start()
         val_data = PrecomputedDataset(temporal_ds.val_data(), shuffle=not params.noshuffle)
         test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
+        job.done()
+
     elif params.sampler == 'simple':
         train_data, val_data, test_data = SimpleDataLoaders(graph, params)
     else:

@@ -7,6 +7,8 @@ from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
 import numpy_indexed as npi
 
+from sgat import logger
+
 
 def numpy_to_torch(data):
     """
@@ -20,24 +22,18 @@ def numpy_to_torch(data):
     Returns:
 
     """
-    for batch in data if type(data) is not HeteroData else [data]:
-        graph = HeteroData()
+    graph = HeteroData()
 
-        for k in batch.node_types + batch.edge_types:
-            for attribute, value in batch[k].items():
-                if attribute == 'edge_index':
-                    dtype = torch.long
-                elif value.dtype == np.float:
-                    dtype = torch.float
-                else:
-                    dtype = None
-                graph[k][attribute] = torch.tensor(value, dtype=dtype)
-
-        if type(data) is HeteroData:
-            return graph
-        else:
-            yield graph
-
+    for k in data.node_types + data.edge_types:
+        for attribute, value in data[k].items():
+            if attribute == 'edge_index':
+                dtype = torch.long
+            elif value.dtype == np.float:
+                dtype = torch.float
+            else:
+                dtype = None
+            graph[k][attribute] = torch.tensor(value, dtype=dtype)
+    return graph
 
 def check_graph(graph):
     for k in graph.edge_types:
@@ -257,7 +253,6 @@ class TemporalDataset(Dataset):
             axis=0
         )
 
-
         # Fake edges added as negative examples
         fake_edges = np.zeros_like(b.ptr)
         # Use same users so the model focuses on predicting what users will buy
@@ -299,14 +294,15 @@ class TemporalDataset(Dataset):
     def val_data(self):
         yield from self.roll(
             self.timesteps[
-                -self.embedding_chunks - self.val_splits - self.test_splits:
-                -self.test_splits if self.test_splits > 0 else len(self.timesteps)])
+            -self.embedding_chunks - self.val_splits - self.test_splits:
+            -self.test_splits if self.test_splits > 0 else len(self.timesteps)])
 
     def test_data(self):
         yield from self.roll(self.timesteps[-self.embedding_chunks - self.test_splits:])
 
-    def __len__(self):
-        return len(self.timesteps)
+    def train_data_len(self):
+        return len(self.timesteps) - self.test_splits - self.val_splits - self.skip_chunks\
+               - self.embedding_chunks - self.supervision_chunks + 1
 
     def __getitem__(self, idx):
         return self.timesteps[idx]
