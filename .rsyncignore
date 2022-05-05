@@ -1,0 +1,9 @@
+venv
+__pycache__
+data
+submissions
+out
+lightning_logs
+.neptune
+.ipynb_checkpoints
+.pytest_cache
