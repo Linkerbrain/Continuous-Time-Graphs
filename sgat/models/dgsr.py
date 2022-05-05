@@ -9,29 +9,19 @@ from torch_geometric.nn import HeteroConv, SAGEConv
 
 from sgat.models import SgatModule
 
-from .dgsr_utils import sparse_dense_mul, pass_messages, relative_order
+from .dgsr_utils import relative_order
+from .dgsr_layer import DGSRLayer
+
+import colored_traceback.auto
+# import sys
+# sys.tracebacklimit = 2
 
 """
 lodewijk command
 python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
 
+python main.py --dataset beauty train --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 10
 """
-
-class DGSR(SgatModule):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        print("Init online.")
-
-    @staticmethod
-    def add_args(parser):
-        pass
-    
-    def forward(self, graph, predict_u, predict_i):
-        print("SUCCESS!!!")
-        pass
-
-
 
 class DGSR(SgatModule):
     @staticmethod
@@ -49,16 +39,14 @@ class DGSR(SgatModule):
 
         print("[DGSR] Starting initiation.")
 
-        print("GOT USER MAX", self.params.user_max)
-
         """ user_num, item_num, hidden_size, user_max, item_max, num_DGRN_layers """
         """ init """
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
         
         # Max number of neighbours used in sampling TODO
-        self.user_max = 10
-        self.item_max = 10
+        self.user_max = self.params.user_max
+        self.item_max = self.params.item_max
         
         self.hidden_size = self.params.embedding_size
         self.sqrt_d = np.sqrt(self.hidden_size)
@@ -73,7 +61,7 @@ class DGSR(SgatModule):
         # propogation
         self.DGSRLayers = nn.ModuleList()
         for _ in range(self.num_DGRN_layers):
-            self.DGSRLayers.append(DGRNLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max))
+            self.DGSRLayers.append(DGSRLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max))
         
         # node updating
         self.w3 = nn.Linear(self.hidden_size*3, self.hidden_size, bias=False)
@@ -83,19 +71,46 @@ class DGSR(SgatModule):
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
 
         print("[DGSR] Succesfully initialised DGSR network")
-        
+     
+    def training_step(self, batch, batch_idx):
+        predict_u = batch['u', 's', 'i'].edge_index[0]
+        predict_i = batch['u', 's', 'i'].edge_index[1]
 
-    def forward(self, graph):
-        
+        # forward
+        predictions = self.forward(batch, predict_u, predict_i)
+
+        # backward
+        self.loss_fn = nn.BCELoss(reduction='mean')
+        print('u', predict_u.shape)
+        print('i', predict_i.shape)
+        print('preds', predictions.shape)
+        print('y', batch['u', 's', 'i'].label.shape)
+        print(batch['u', 's', 'i'])
+        print()
+        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
+
+        self.log('train/loss', loss, on_step=True)
+        self.log('train/n_customers', float(batch['u'].code.shape[0]))
+        self.log('train/n_articles', float(batch['i'].code.shape[0]))
+        self.log('train/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
+        self.log('train/time', time.time())
+
+        return loss   
+
+    def forward(self, batch, predict_u, predict_i):
+        u_code = batch['u'].code
+        i_code = batch['i'].code
+        edge_index = batch[('u', 'b', 'i')].edge_index
+
+        oui = torch.ones(len(batch[('u', 'b', 'i')].code)).long() # TODO
+        oiu = torch.ones(len(batch[('u', 'b', 'i')].code)).long() # TODO
+
         # embedding
-        hu = self.user_embedding(graph['u'].x) # (u, h)
-        hi = self.item_embedding(graph['i'].x) # (i, h)
+        hu = self.user_embedding(u_code) # (u, h)
+        hi = self.item_embedding(i_code) # (i, h)
         
         # parse graph
-        edges = graph['u', 'bought', 'i'].edge_index
-        oui = graph['u', 'bought', 'i'].oui
-        oiu = graph['u', 'bought', 'i'].oiu
-        
+        edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1]), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
         user_per_trans, item_per_trans = edges.indices()
         
         rui = relative_order(oui, user_per_trans, n=self.user_max)
@@ -122,104 +137,19 @@ class DGSR(SgatModule):
             hi_list.append(hi)
         
         # recommendation
-        prediction_user_embedding = torch.hstack(hu_list)
-        
-        scores = prediction_user_embedding @ self.wP(hi_list[0]).T
-        predictions = torch.softmax(scores, 0)
+
+        # get u embeddings and i embeddings (2 lists that belong elementwise, contain duplicates)
+        predict_u_graph_embed = torch.hstack(hu_list)[predict_u]
+        predict_i_embed = self.wP(hi_list[0])[predict_i]
+
+        # get the dot product of each element
+        scores = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)
+
+        # convert scores to a probability if it is likely to be bought
+        predictions = torch.sigmoid(scores)
         
         return predictions
 
-
-
-
-
-class DGRNLayer(nn.Module): # Dynamic Graph Recommendation Network
-    def __init__(self,
-                 user_num, item_num,
-                 hidden_size,
-                 user_max, item_max
-                ):
-        super().__init__()
-        """ init """
-        self.user_vocab_num = user_num
-        self.item_vocab_num = item_num
-        
-        self.user_max = user_max
-        self.item_max = item_max
-        
-        self.hidden_size = hidden_size
-        self.sqrt_d = np.sqrt(self.hidden_size)
-        
-        """ layers """        
-        self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
-        self.w2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
-        
-        self.w3 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term User
-        self.w4 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term Item
-        
-        self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
-        self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
-        
-    def longterm(self, u_embedded, i_embedded, edge_index, rui, riu):
-        # --- long term ---
-        
-        user_messages = self.w2(u_embedded) # (u, h)
-        item_messages = self.w1(i_embedded) # (i, h)
-        
-        # message similarity
-        e = (user_messages) @ (item_messages).T # (u, i)
-        e = sparse_dense_mul(edge_index, e) # (u, i)
-        
-        user_per_trans, item_per_trans = edge_index.indices()
-        
-        # - users to items -
-            
-        # compute positional embeddings
-        pVui = self.pV(rui)
-        
-        # dot product van elke pos embedding met betreffende user
-        u_at_pVui = torch.einsum('ij, ij->i', user_messages[user_per_trans], pVui)
-        
-        # alpha is softmax(wu @ wi.T + wu @ p)
-        e_ui = torch.sparse_coo_tensor(e._indices(), e._values() + u_at_pVui, e.size())        
-        alphas = torch.sparse.softmax(e_ui / self.sqrt_d, dim=1) # (u, i)
-        
-        
-        # - items to users -
-        
-        # compute positional embeddings
-        pKiu = self.pK(riu)
-        
-        # dot product van elke pos embedding met betreffende user
-        u_at_pKiu = torch.einsum('ij, ij->i', item_messages[item_per_trans], pKiu)
-        
-        # beta is softmax(wi @ wu.T + wi @ p)
-        e_trans = torch.transpose(e, 0, 1)
-        e_iu = torch.sparse_coo_tensor(e_trans._indices(), e_trans._values() + u_at_pKiu, e_trans.size())        
-        betas = torch.sparse.softmax(e_iu / self.sqrt_d, dim=1) # (u, i)
-        
-        # pass messages
-        longterm_hu = pass_messages(item_messages, alphas, pKiu)
-        longterm_hi = pass_messages(user_messages, betas, pVui)
-        
-        return longterm_hu, longterm_hi
-    
-    def shortterm(self, u, i, e, rui, riu):
-        """ TODO """
-        
-        # pass messages
-        shortterm_hu = torch.zeros((len(u), self.hidden_size)).float()
-        shortterm_hi = torch.zeros((len(i), self.hidden_size)).float()
-        
-        return shortterm_hu, shortterm_hi
-        
-        
-    def forward(self, u_emb, i_emb, edge_index, rui, riu):
-        # propagate information
-        # longterm
-        hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
-        
-        # shortterm
-        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, rui, riu)
-        
-        return hLu, hSu, hLi, hSi
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer

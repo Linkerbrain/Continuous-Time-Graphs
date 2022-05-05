@@ -27,8 +27,8 @@ def pass_messages(messages, adjacency, pVui):
     alpha = adjacency._values().unsqueeze(-1)
     
     # prepare output
-    output = torch.zeros((adjacency.shape[0], messages.shape[1]), dtype=float)
-    
+    output = torch.zeros((adjacency.shape[0], messages.shape[1]), dtype=torch.float)
+
     # add messages
     output.index_add_(0, user_per_trans, messages[item_per_trans] * alpha)
     
