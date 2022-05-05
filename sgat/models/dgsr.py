@@ -7,7 +7,7 @@ from pytorch_lightning import LightningModule
 from torch import nn
 from torch_geometric.nn import HeteroConv, SAGEConv
 
-from sgat.models import SgatModule
+from sgat.models.sgat_module import SgatModule
 
 from .dgsr_utils import relative_order
 from .dgsr_layer import DGSRLayer
@@ -18,9 +18,12 @@ import colored_traceback.auto
 
 """
 lodewijk command
-python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 simple
 
-python main.py --dataset beauty train --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 10
+
+python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 10
 """
 
 class DGSR(SgatModule):
@@ -70,32 +73,10 @@ class DGSR(SgatModule):
         # recommendation
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
 
-        print("[DGSR] Succesfully initialised DGSR network")
-     
-    def training_step(self, batch, batch_idx):
-        predict_u = batch['u', 's', 'i'].edge_index[0]
-        predict_i = batch['u', 's', 'i'].edge_index[1]
-
-        # forward
-        predictions = self.forward(batch, predict_u, predict_i)
-
-        # backward
+        """ training """
         self.loss_fn = nn.BCELoss(reduction='mean')
-        print('u', predict_u.shape)
-        print('i', predict_i.shape)
-        print('preds', predictions.shape)
-        print('y', batch['u', 's', 'i'].label.shape)
-        print(batch['u', 's', 'i'])
-        print()
-        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
 
-        self.log('train/loss', loss, on_step=True)
-        self.log('train/n_customers', float(batch['u'].code.shape[0]))
-        self.log('train/n_articles', float(batch['i'].code.shape[0]))
-        self.log('train/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
-        self.log('train/time', time.time())
-
-        return loss   
+        print("[DGSR] Succesfully initialised DGSR network")
 
     def forward(self, batch, predict_u, predict_i):
         u_code = batch['u'].code

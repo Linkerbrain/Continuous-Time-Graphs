@@ -15,12 +15,18 @@ import pytorch_lightning as pl
 
 from sgat import logger
 from sgat.graphs import numpy_to_torch
+from sgat.simple_dataloader import SimpleDataLoaders
 from sgat.models import mh
 from sgat.models import dgsr
 
 class PrecomputedDataset(Iterable, Sized):
     def __init__(self, batches, shuffle=True):
-        self.batches = list(numpy_to_torch(batches))
+        self.batches = []
+        for batch in batches:
+            # add_oui(batch)
+            batch = numpy_to_torch(batch)
+            self.batches.append(batch)
+
         self.shuffle = shuffle
 
     def __len__(self):
@@ -50,7 +56,7 @@ def make_dataset(params):
 
 
 @task('Making data loaders')
-def make_datalaoders(graph, params):
+def make_dataloaders(graph, params):
     if params.sampler == 'periodic':
         temporal_ds = graphs.TemporalDataset(graph, params)
 
@@ -58,8 +64,8 @@ def make_datalaoders(graph, params):
         train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle)
         val_data = PrecomputedDataset(temporal_ds.val_data(), shuffle=not params.noshuffle)
         test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
-    elif params.sampler == 'ordered':
-        raise NotImplementedError()
+    elif params.sampler == 'simple':
+        train_data, val_data, test_data = SimpleDataLoaders(graph, params)
     else:
         raise NotImplementedError()
 
@@ -88,7 +94,7 @@ def main(params):
     logger.info(f"There are {graph['i'].code.shape[0]} items")
     logger.info(f"There are {graph['u', 'b', 'i'].code.shape[0]} transactions")
 
-    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_datalaoders(graph, params)
+    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, params)
 
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
 
@@ -119,7 +125,7 @@ def main(params):
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
-                         log_every_n_steps=1, check_val_every_n_epoch=10, callbacks=[checkpoint_callback],
+                         log_every_n_steps=1, check_val_every_n_epoch=1, callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
                          strategy=DDPStrategy(find_unused_parameters=False,
                                               static_graph=True) if params.devices > 1 else None)
@@ -179,6 +185,10 @@ if __name__ == "__main__":
     models.dgsr.DGSR.add_args(parser_dgsr)
 
     gat_sampler_subparser = parser_dgsr.add_subparsers(dest='sampler')
+
+    parser_simple = gat_sampler_subparser.add_parser('simple')
+    SimpleDataLoaders.add_args(parser_simple)
+
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     graphs.TemporalDataset.add_args(parser_periodic)
 
