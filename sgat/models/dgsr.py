@@ -23,7 +23,7 @@ python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_m
 
 python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
 
-python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 10
+python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 15
 """
 
 class DGSR(SgatModule):

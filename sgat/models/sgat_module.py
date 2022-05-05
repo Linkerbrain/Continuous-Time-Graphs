@@ -57,11 +57,11 @@ class SgatModule(pl.LightningModule):
         loss = self.loss_fn(supervised_predictions, batch['u', 's', 'i'].label)
     
         # COMPUTE MAP
-        map_predict_u = batch['u', 'n', 'i'].edge_index[0]
-        map_predict_i = batch['u', 'n', 'i'].edge_index[1]
+        map_predict_u = batch['u', 'eval', 'i'].edge_index[0]
+        map_predict_i = batch['u', 'eval', 'i'].edge_index[1]
 
         # make predictions
-        map_predictions = self.forward(batch, map_predict_u, map_predict_i)
+        map_predictions = self.forward(batch, map_predict_u, map_predict_i, predict_i_ptr=False)
 
         # get top k predictions (could be optimized)
         df = pd.DataFrame({
@@ -73,14 +73,10 @@ class SgatModule(pl.LightningModule):
         for u, ip in df.groupby("u"):
             y_pred.append(ip.nlargest(12, 'p')['i'].values)
 
-        df2 = pd.DataFrame({
-            'u' : supervised_predict_u,
-            'i' : supervised_predict_i,
-        })
-
+        n = 100 # num random fake items
         y_true = []
-        for u, i in df2.groupby("u"):
-            y_true.append(i['i'].values)
+        for u, i in df.groupby("u"):
+            y_true.append(i['i'].values[n:])
     
         MAP = mean_average_precision(y_true, y_pred, k=12)
 

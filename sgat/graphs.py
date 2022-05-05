@@ -179,9 +179,20 @@ def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, ma
 
 
 def add_random_eval_edges(graph, true_edges, num_items, n):
-    true_users = np.unique(true_edges[1, :])
+    true_users = np.unique(true_edges[0, :])
 
     random_items = np.random.randint(0, num_items, size=(n))
+
+    # make every combination of true user and the random items
+    eval_edges = [np.repeat(true_users, n),
+                np.tile(random_items, len(true_users))]
+
+    eval_u = np.hstack((eval_edges[0], true_edges[0]))
+    eval_i = np.hstack((eval_edges[1], true_edges[1]))
+
+    eval_and_true_edges = np.vstack((eval_u, eval_i))
+
+    graph['u', 'eval', 'i'].edge_index = eval_and_true_edges # eval_and_true_edges
 
 
 class TemporalDataset(Dataset):
@@ -274,7 +285,9 @@ class TemporalDataset(Dataset):
         # Resample embedding_graph to the local neighborhood of users in the supervision graph
         sampled_graph = sample_neighbourhood(embedding_graph, supervision_graph['u'].ptr, self.hops)
 
-        add_random_eval_edges(embedding_graph, true_edges=b.ptr, num_items=self.graph['u'].code.shape[0], n=100)
+        # Add random edges
+        real_edges = sampled_graph['u', 's', 'i'].edge_index[:, sampled_graph['u', 's', 'i'].label==1]
+        add_random_eval_edges(sampled_graph, true_edges=real_edges, num_items=self.graph['u'].code.shape[0], n=100)
 
         return sampled_graph
 
