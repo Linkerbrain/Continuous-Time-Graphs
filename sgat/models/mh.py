@@ -26,8 +26,8 @@ class MH(SgatModule):
         current_size = 0
         for i in range(self.params.conv_layers):
             self.convs.add_module(f"sage_layer_{i}", HeteroConv({
-                ('u', 'b', 'i'): SAGEConv(-1, self.params.embedding_size),
-                ('i', 'rev_b', 'u'): SAGEConv(-1, self.params.embedding_size),
+                ('u', 'b', 'i'): SAGEConv(self.params.embedding_size, self.params.embedding_size),
+                ('i', 'rev_b', 'u'): SAGEConv(self.params.embedding_size, self.params.embedding_size),
             }))
 
         # for the dot product at the end between the complete customer embedding and a candidate article

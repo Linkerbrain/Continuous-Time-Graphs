@@ -205,6 +205,7 @@ class TemporalDataset(Dataset):
         self.test_splits = params.test_splits
         self.skip_chunks = params.skip_chunks
         self.hops = params.hops
+        self.max_target_users = params.max_target_users
 
         self.graph = graph
 
@@ -229,6 +230,7 @@ class TemporalDataset(Dataset):
         parser.add_argument('--val_splits', type=int, default=2)
         parser.add_argument('--test_splits', type=int, default=0)
         parser.add_argument('--skip_chunks', type=int, default=0, help="Skip the first n chunks")
+        parser.add_argument('--max_target_users', type=int, default=None)
         parser.add_argument('--negative_examples_ratio', type=float, default=1.0)
         parser.add_argument('--hops', type=int, default=3)
 
@@ -240,6 +242,9 @@ class TemporalDataset(Dataset):
 
         supervision_graph = make_subset(self.graph,
                                         filter_transactions=np.bitwise_or.reduce(chunks[self.embedding_chunks:]))
+
+
+
 
         # noinspection PyUnreachableCode
         if True:  # TODO: Add as option to remove or not cold starts

@@ -12,6 +12,7 @@ from sgat.models.sgat_module import SgatModule
 class Dummy(SgatModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        del self.graph
         self.linear = nn.Linear(1,1)
 
 

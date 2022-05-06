@@ -3,10 +3,12 @@ import logging
 import random
 from typing import Sized, Iterable
 
+import numpy as np
 import torch
 import pytorch_lightning
 from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
+from torch.utils.data import Dataset
 from torch_geometric.loader import DataLoader
 
 from sgat import data, graphs, models, Task, task
@@ -25,7 +27,7 @@ from sgat.no_traceback import no_traceback
 from tqdm.auto import tqdm
 
 
-class PrecomputedDataset(Iterable, Sized):
+class PrecomputedDataset(Dataset, Iterable, Sized):
     def __init__(self, batches, shuffle=True, n_batches=None):
         self.batches = []
         for batch in tqdm(batches, total=n_batches):
@@ -103,6 +105,11 @@ def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dat
 
 
 def main(params):
+    # Set all the seeds
+    random.seed(params.seed)
+    np.random.seed(params.seed)
+    torch.manual_seed(params.seed)
+
     graph = make_dataset(params)
 
     logger.info(f"There are {graph['u'].code.shape[0]} users")
@@ -143,8 +150,7 @@ def main(params):
                          log_every_n_steps=1, check_val_every_n_epoch=1 if not params.novalidate else int(10e9),
                          callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
-                         strategy=DDPStrategy(find_unused_parameters=False,
-                                              static_graph=True) if params.devices > 1 else None)
+                         strategy='ddp_sharded' if params.devices > 1 else None)
 
     if not params.notrain:
         task = Task('Training model').start()
@@ -209,6 +215,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--nologger', action='store_true')
     parser_train.add_argument('--notest', action='store_true')
     parser_train.add_argument('--noshuffle', action='store_true')
+    parser_train.add_argument('--seed', type=int, default=0)
 
     model_subparser = parser_train.add_subparsers(dest='model')
 
@@ -218,5 +225,7 @@ if __name__ == "__main__":
 
     # Now parse the actual params
     params = parser.parse_args()
+
+    logger.info(params)
 
     no_traceback(main, params)
