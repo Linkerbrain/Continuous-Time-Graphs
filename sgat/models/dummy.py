@@ -23,10 +23,11 @@ class Dummy(SgatModule):
 
     def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
         p = torch.zeros_like(predict_u, device=self.device, dtype=torch.float)
+        p = torch.sigmoid(self.linear(p.unsqueeze(1)).squeeze())
         if self.params.mode == 'neighbour_cheat':
             s = graph['u', 's', 'i'].edge_index.cpu().numpy()
             labels = graph['u', 's', 'i'].label.bool().cpu().numpy()
             t = s[:, labels]
             r = torch.stack([predict_u, predict_i], dim=0).cpu().numpy()
-            p = torch.relu(p) + torch.tensor(npi.contains(t, r, axis=1)).float()
-        return torch.sigmoid(self.linear(p.unsqueeze(1)).squeeze())
+            p = torch.relu(p) * torch.tensor(npi.contains(t, r, axis=1)).float()
+        return p
