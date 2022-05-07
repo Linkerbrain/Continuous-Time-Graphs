@@ -1,5 +1,6 @@
 import time
 
+import numpy_indexed as npi
 import pandas as pd
 import torch
 from pytorch_lightning import LightningModule
@@ -18,8 +19,14 @@ class Dummy(SgatModule):
 
     @staticmethod
     def add_args(parser):
-        parser.add_argument('--mode', type=str, options=['dumb', 'neighbour_cheat'])
+        parser.add_argument('--mode', type=str, choices=['dumb', 'neighbour_cheat'], default='dumb')
 
     def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
         p = torch.zeros_like(predict_u, device=self.device, dtype=torch.float)
+        if self.params.mode == 'neighbour_cheat':
+            s = graph['u', 's', 'i'].edge_index.cpu().numpy()
+            labels = graph['u', 's', 'i'].label.bool().cpu().numpy()
+            t = s[:, labels]
+            r = torch.stack([predict_u, predict_i], dim=0).cpu().numpy()
+            p = torch.relu(p) + torch.tensor(npi.contains(t, r, axis=1)).float()
         return torch.sigmoid(self.linear(p.unsqueeze(1)).squeeze())

@@ -57,8 +57,10 @@ class SgatModule(pl.LightningModule):
         # forward
         predictions = self.forward(batch, predict_u, predict_i)
 
+        labels = batch['u', 's', 'i'].label
+
         # backward
-        loss = self.loss_fn(predictions, batch['u', 's', 'i'].label)
+        loss = self.loss_fn(predictions, labels)
 
         # log results for the neptune dashboard
         self.log('train/loss', loss, on_step=True)
@@ -69,6 +71,8 @@ class SgatModule(pl.LightningModule):
         self.log('train/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
         self.log('train/n_targets', float(batch['u', 's', 'i'].edge_index.shape[1]))
         self.log('train/time', time.time())
+        self.log('train/positives_mean', torch.mean(predictions[labels.bool()]))
+        self.log('train/negatives_mean', torch.mean(predictions[~labels.bool()]))
 
         return loss
 
@@ -95,6 +99,7 @@ class SgatModule(pl.LightningModule):
             y_true.append(i['i'].values[n:])
 
         MAP = mean_average_precision(y_true, y_pred, k=self.params.K)
+
         return MAP
 
     def neighbour_MAP(self, batch):
@@ -157,6 +162,7 @@ class SgatModule(pl.LightningModule):
         self.log('val/n_articles', float(batch['i'].code.shape[0]), batch_size=len(supervised_predict_u))
         self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]), batch_size=len(supervised_predict_u))
         self.log('val/time', time.time(), batch_size=len(supervised_predict_u))
+
 
         return loss
 
