@@ -3,10 +3,12 @@ import logging
 import random
 from typing import Sized, Iterable
 
+import numpy as np
 import torch
 import pytorch_lightning
 from pytorch_lightning.loggers import NeptuneLogger
 from pytorch_lightning.strategies import DDPStrategy
+from torch.utils.data import Dataset
 from torch_geometric.loader import DataLoader
 
 from sgat import data, graphs, models, Task, task
@@ -15,8 +17,12 @@ import pytorch_lightning as pl
 
 from sgat import logger
 from sgat.graphs import numpy_to_torch
+
 from sgat.graph_enhance import add_oui_and_oiu
 from sgat.neighbour_dataset import NeighbourDataset
+
+from sgat.models.sgat_module import SgatModule
+
 from sgat.models import mh
 from sgat.models import dgsr
 
@@ -24,7 +30,8 @@ from sgat.no_traceback import no_traceback
 
 from tqdm.auto import tqdm
 
-class PrecomputedDataset(Iterable, Sized):
+
+class PrecomputedDataset(Dataset, Iterable, Sized):
     def __init__(self, batches, shuffle=True, n_batches=None):
         self.batches = []
         for batch in tqdm(batches, total=n_batches):
@@ -109,12 +116,19 @@ def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dat
         model = models.dgsr.DGSR(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'MH':
         model = models.mh.MH(graph, params, train_dataloader_gen, val_dataloader_gen)
+    elif params.model == 'DUMMY':
+        model = models.dummy.Dummy(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
         raise NotImplementedError()
     return model
 
 
 def main(params):
+    # Set all the seeds
+    random.seed(params.seed)
+    np.random.seed(params.seed)
+    torch.manual_seed(params.seed)
+
     graph = make_dataset(params)
 
     logger.info(f"There are {graph['u'].code.shape[0]} users")
@@ -152,10 +166,10 @@ def main(params):
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
-                         log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs, callbacks=[checkpoint_callback],
+                         log_every_n_steps=1, check_val_every_n_epoch=1 if not params.novalidate else int(10e9),
+                         callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
-                         strategy=DDPStrategy(find_unused_parameters=False,
-                                              static_graph=True) if params.devices > 1 else None)
+                         strategy='ddp_sharded' if params.devices > 1 else None)
 
     if not params.notrain:
         task = Task('Training model').start()
@@ -174,6 +188,20 @@ def main(params):
 
     # For interactive sessions/debugging
     return locals()
+
+
+def subparse_model(subparser, name, module):
+    parser_module = subparser.add_parser(name)
+    models.sgat_module.SgatModule.add_base_args(parser_module)
+    module.add_args(parser_module)
+
+    gat_sampler_subparser = parser_module.add_subparsers(dest='sampler')
+
+    parser_simple = gat_sampler_subparser.add_parser('neighbour')
+    NeighbourDataset.add_args(parser_simple)
+
+    parser_periodic = gat_sampler_subparser.add_parser('periodic')
+    graphs.TemporalDataset.add_args(parser_periodic)
 
 
 if __name__ == "__main__":
@@ -198,7 +226,8 @@ if __name__ == "__main__":
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
-    parser_train.add_argument('--monitor', type=str, default='val/MAP', choices=['val/MAP', 'val/NDCG'])
+    parser_train.add_argument('--monitor', type=str, default='val/MAP_neighbour',
+                              choices=['val/MAP_neighbour', 'val/MAP_random'])
     parser_train.add_argument('--notrain', action='store_true')
     parser_train.add_argument('--novalidate', action='store_true')
     parser_train.add_argument('--norich', action='store_true')
@@ -206,35 +235,17 @@ if __name__ == "__main__":
     parser_train.add_argument('--nologger', action='store_true')
     parser_train.add_argument('--notest', action='store_true')
     parser_train.add_argument('--noshuffle', action='store_true')
+    parser_train.add_argument('--seed', type=int, default=0)
 
     model_subparser = parser_train.add_subparsers(dest='model')
 
-    parser_dgsr = model_subparser.add_parser('DGSR')
-    models.dgsr.DGSR.add_args(parser_dgsr)
+    subparse_model(model_subparser, 'DGSR', models.dgsr.DGSR)
+    subparse_model(model_subparser, 'MH', models.mh.MH)
+    subparse_model(model_subparser, 'DUMMY', models.dummy.Dummy)
 
-    gat_sampler_subparser = parser_dgsr.add_subparsers(dest='sampler')
-
-    parser_simple = gat_sampler_subparser.add_parser('neighbour')
-    NeighbourDataset.add_args(parser_simple)
-
-    parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    graphs.TemporalDataset.add_args(parser_periodic)
-
-    parser_mh = model_subparser.add_parser('MH')
-    models.mh.MH.add_args(parser_mh)
-
-    gat_sampler_subparser = parser_mh.add_subparsers(dest='sampler')
-
-    parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    graphs.TemporalDataset.add_args(parser_periodic)
-    # parser_periodic.add_argument('--loader', type=str, default='full')
-    # parser_periodic.add_argument('--group_noise', type=float, default=1)
-
-    # parser_ordered = gat_sampler_subparser.add_parser('ordered')
-    # Add args for ordered sampling here
-
+    # Now parse the actual params
     params = parser.parse_args()
 
-    no_traceback(main, params)
+    logger.info(params)
 
-    # r = main(params)
+    no_traceback(main, params)
