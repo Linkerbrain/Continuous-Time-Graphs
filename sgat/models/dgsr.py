@@ -90,9 +90,6 @@ class DGSR(SgatModule):
         # recommendation
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
 
-        """ training """
-        self.loss_fn = nn.BCELoss(reduction='mean')
-
         print("[DGSR] Succesfully initialised DGSR network")
 
     def forward_graph(self, batch):

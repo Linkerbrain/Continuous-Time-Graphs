@@ -38,3 +38,39 @@ def mean_average_precision(y_true, y_pred, k=12):
     map_at_k = average_precisions_at_k.mean()
 
     return map_at_k
+
+
+def compute_eval_metrics(all_ranks):
+    """
+    Copy-paste from the DGSR code (DGSR_utils.py) with some edits to work in our framework.
+
+    Their code calculates the dcg but calls it ndgg for some reason.
+
+    Args:
+        all_top:
+        random_rank:
+
+    Returns:
+
+    """
+    recall5, recall10, recall20, dcg5, dcg10, dcg20 = [], [], [], [], [], []
+    for rank in all_ranks:
+        if rank < 20:
+            dcg20.append(1 / np.log2(rank + 2))
+            recall20.append(1)
+        else:
+            dcg20.append(0)
+            recall20.append(0)
+        if rank < 10:
+            dcg10.append(1 / np.log2(rank + 2))
+            recall10.append(1)
+        else:
+            dcg10.append(0)
+            recall10.append(0)
+        if rank < 5:
+            dcg5.append(1 / np.log2(rank + 2))
+            recall5.append(1)
+        else:
+            dcg5.append(0)
+            recall5.append(0)
+    return np.mean(recall5), np.mean(recall10), np.mean(recall20), np.mean(dcg5), np.mean(dcg10), np.mean(dcg20)

@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from sgat.graphs import make_subset, sample_neighbourhood, add_random_eval_edges
 
 
-class TemporalDataset(Dataset):
+class PeriodicDataset(Dataset):
     # noinspection PyTypeChecker
     def __init__(self, graph, params):
         self.chunk_size = params.chunk_size

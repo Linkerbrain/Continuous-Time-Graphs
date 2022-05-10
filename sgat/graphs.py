@@ -176,6 +176,7 @@ def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, ma
 
 
 def add_random_eval_edges(graph, true_edges, num_items, n, graph_item_codes):
+
     true_users = np.unique(true_edges[0, :])
 
     random_items = np.random.randint(0, num_items, size=(n))
@@ -192,6 +193,7 @@ def add_random_eval_edges(graph, true_edges, num_items, n, graph_item_codes):
 
     eval_and_true_edges = np.vstack((eval_u, eval_i))
 
+    # TODO: Don't put it in edge_index that doesnt make sense it's codes
     graph['u', 'eval', 'i'].edge_index = eval_and_true_edges # eval_and_true_edges
 
 

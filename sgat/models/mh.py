@@ -52,8 +52,7 @@ class MH(SgatModule):
     def predict_all_nodes(self, predict_u):
         raise NotImplementedError()
 
-    def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
-        assert predict_i_ptr
+    def forward(self, graph, predict_u, predict_i, predict_i_ptr):
 
         # TODO: Add node features
         x_dict = {
@@ -82,7 +81,7 @@ class MH(SgatModule):
 
         # check if predict i are indices or codes
         if predict_i_ptr:
-            embeddings_i = x_dict['i'][predict_i]
+            embeddings_i = self.item_embedding(x_dict['i'].code[predict_i])
         else:
             embeddings_i = self.item_embedding(predict_i)
 

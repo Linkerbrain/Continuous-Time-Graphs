@@ -14,31 +14,35 @@ HM_PATH = "hm"
 
 AMAZON_DATASETS = ['beauty', 'cd', 'games', 'movie']
 
+
 # Prep
 def refine_time(data):
     """
     assures items bought by a user don't have the exact same time
     5, 1, 2, 2, 8 -> 1, 2, 3, 5, 8
     """
-    
+    # TODO: Probably too slow for HM data. Maybe just add tiny random noise to data['t']? Also ensures there is no time dilation
+
     data = data.sort_values(['t'], kind='mergesort')
     time_seq = data['t'].values
     time_gap = 1
-    
+
     for i, da in enumerate(time_seq[0:-1]):
-        if time_seq[i] == time_seq[i+1] or time_seq[i] > time_seq[i+1]:
-            time_seq[i+1] = time_seq[i+1] + time_gap
+        if time_seq[i] == time_seq[i + 1] or time_seq[i] > time_seq[i + 1]:
+            time_seq[i + 1] = time_seq[i + 1] + time_gap
             time_gap += 1
-            
+
     data['t'] = time_seq
-    
-    return  data
+
+    return data
+
 
 # noinspection PyTypeChecker
 def amazon_dataset(name):
     task = Task(f"Loading amazon/{name} dataset").start()
 
-    df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"}, axis=1)
+    df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"},
+                                                                      axis=1)
 
     df = df.groupby('u').apply(refine_time).reset_index(drop=True)
     df['t'] = df['t'].astype('int64')
@@ -82,7 +86,6 @@ class HMData(object):
         # Convert date column to datetime
         self.df_transactions["date"] = pd.to_datetime(self.df_transactions["t_dat"], format="%Y-%m-%d")
 
-
     @task("Creating H&M features")
     def _create_features(self):
         articles_ = self.df_articles
@@ -122,7 +125,6 @@ class HMData(object):
         self.farticles = articles_features
         self.fcustomers = customers_features
         self.ftransactions = transactions_features
-
 
     def subset(self, days=7, keep_all_customers=False):
         """
@@ -181,4 +183,3 @@ class HMData(object):
 
         # task.done()
         return data
-

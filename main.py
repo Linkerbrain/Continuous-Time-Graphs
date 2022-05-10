@@ -66,7 +66,7 @@ def make_dataset(params):
 @task('Making data loaders')
 def make_dataloaders(graph, params):
     if params.sampler == 'periodic':
-        temporal_ds = sgat.datasets.periodic_dataset.TemporalDataset(graph, params)
+        temporal_ds = sgat.datasets.periodic_dataset.PeriodicDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
         job = Task('Precomputing training set').start()
@@ -194,7 +194,7 @@ def subparse_model(subparser, name, module):
     NeighbourDataset.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    sgat.datasets.periodic_dataset.TemporalDataset.add_args(parser_periodic)
+    sgat.datasets.periodic_dataset.PeriodicDataset.add_args(parser_periodic)
 
 
 if __name__ == "__main__":
@@ -229,9 +229,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--notest', action='store_true')
     parser_train.add_argument('--noshuffle', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
-    
-    parser_train.add_argument('--train_style', type=str, default='binary',
-                              choices=['binary', 'dgsr_softmax'])
+
 
     model_subparser = parser_train.add_subparsers(dest='model')
 
