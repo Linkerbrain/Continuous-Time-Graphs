@@ -49,6 +49,9 @@ class MH(SgatModule):
         parser.add_argument('--activation', type=str, default=None)
         parser.add_argument('--dropout', type=float, default=0.25)
 
+    def predict_all_nodes(self, predict_u):
+        raise NotImplementedError()
+
     def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
         assert predict_i_ptr
 

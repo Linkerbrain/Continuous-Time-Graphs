@@ -3,14 +3,22 @@ import pandas as pd
 import pickle
 
 class RecentSampler():
-    def __init__(self, df, n):
+    def __init__(self, ordered_trans, ordered_trans_t, n):
         """
-        df = pd.DataFrame({'u':ordered_trans[0, :], 'i':ordered_trans[1, :], 't':ordered_trans_t})
+        ordered_trans is edge_index [[u, u, u, u], [i, i, i, i]]
+        ordered_trans_t is corresponding time [t, t, t, t]
 
         n is max number of recent transactions per node sampled
         """
+        self.ordered_trans = ordered_trans
+        self.ordered_trans_t = ordered_trans_t
 
-        self.u_connections, self.u_transactions, self.i_connections, self.i_transactions = self._make_dictionaries(df, n)
+        # we currently make dataframe into edge index and back, this can be smoothed out obv
+        self.df = pd.DataFrame({"u": self.ordered_trans[0, :],
+                            "i": self.ordered_trans[1, :],
+                            "t": self.ordered_trans_t})
+
+        self.u_connections, self.u_transactions, self.i_connections, self.i_transactions = self._make_dictionaries(self.df, n)
 
     def _make_dictionaries(self, df, n=20):
         # -- build User most recent transaction lists --
@@ -32,7 +40,7 @@ class RecentSampler():
             
             u_transaction_list.append(zero_padded_t)
 
-        print("Created user dictionaries")
+        print("[RecentSampler] Created user dictionaries")
 
         # -- build Item most recent transaction lists --
         i_connection_list = [np.zeros(n)]
@@ -53,7 +61,7 @@ class RecentSampler():
             
             i_transaction_list.append(zero_padded_t)
 
-        print("Created item dictionaries")
+        print("[RecentSampler] Created item dictionaries")
 
         # -- parse to array --
 
@@ -63,13 +71,7 @@ class RecentSampler():
         i_connections = np.stack(i_connection_list).astype(np.int32)
         i_transactions = np.stack(i_transaction_list).astype(np.int32)
 
-        print("u_connections:", u_connections)
-        print("u_transactions:", u_transactions)
-
-        print("i_connections:", i_connections)
-        print("i_transactions:", i_transactions)
-
-        print(f"Created database of {len(u_connections)-1} users and {len(i_connections)-1} items")
+        print(f"[RecentSampler] Created database of {len(u_connections)-1} users and {len(i_connections)-1} items")
 
         return u_connections, u_transactions, i_connections, i_transactions
 
@@ -128,8 +130,9 @@ class RecentSampler():
         # second most recent item for validation
         # other items for training
 
-        sub = ordered_trans[:, t_idxs]
-        user_trans = np.where(sub[0]==41)[0]
+        sub = self.ordered_trans[:, t_idxs]
+
+        user_trans = np.where(sub[0]==target_u)[0]
 
         if len(user_trans) < 5:
             return {"valid":False}
@@ -137,17 +140,17 @@ class RecentSampler():
         # testing
         final_idx = user_trans[-1]
 
-        y_test_trans = t_idxs[final_idx]
+        y_test_trans = np.expand_dims(t_idxs[final_idx], 0)
         x_test_trans = t_idxs[:final_idx]
 
         # validating
         pen_ult_idx = user_trans[-2]
-        y_val_trans = t_idxs[pen_ult_idx]
+        y_val_trans = np.expand_dims(t_idxs[pen_ult_idx], 0)
         x_val_trans = t_idxs[:pen_ult_idx]
 
         # training (currently only -3, but we could do everything tot en met -3)
         pen_pen_ult_idx = user_trans[-3]
-        y_train_trans = t_idxs[pen_pen_ult_idx]
+        y_train_trans = np.expand_dims(t_idxs[pen_pen_ult_idx], 0)
         x_train_trans = t_idxs[:pen_pen_ult_idx]
 
         # build return

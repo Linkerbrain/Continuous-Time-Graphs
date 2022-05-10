@@ -30,7 +30,8 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs
 
 
 # DGRN CPU + NEIGHBOUR SAMPLING
-python main.py --dataset beauty train --nologger --accelerator cpu  --val_epochs 2 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 neighbour
+python main.py --dataset beauty train --train_style dgsr_softmax --accelerator cpu --val_epochs 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 neighbour
+python main.py --dataset beauty train --train_style dgsr_softmax --accelerator gpu --devices 1 --val_epochs 1 DGSR --user_max 50 --item_max 50 --embedding_size 50 --num_DGRN_layers=2 neighbour
 
 """
 
@@ -94,7 +95,7 @@ class DGSR(SgatModule):
 
         print("[DGSR] Succesfully initialised DGSR network")
 
-    def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
+    def forward_graph(self, batch):
         u_code = batch['u'].code
         i_code = batch['i'].code
         edge_index = batch[('u', 'b', 'i')].edge_index
@@ -136,6 +137,34 @@ class DGSR(SgatModule):
             # save user embedding at every timestep
             hu_list.append(hu)
             hi_list.append(hi)
+
+        return hu_list, hi_list
+
+    def predict_all_nodes(self, batch, predict_u):
+        """
+        Predict for all items in the graph
+        """
+        # propagate graph
+        hu_list, hi_list = self.forward_graph(batch)
+
+        # encode u
+        predict_u_graph_embed = torch.hstack(hu_list)[predict_u]
+
+        # encode all i
+        # embedding of all nodes is just the embedding table
+        predict_i_embed = self.wP(self.item_embedding.weight)
+
+        # get the dot product of each element
+        scores = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)
+
+        # convert scores to a probability if it is likely to be bought
+        predictions = torch.sigmoid(scores)
+
+        return predictions
+
+    def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
+        # propagate graph
+        hu_list, hi_list = self.forward_graph(batch)
         
         # recommendation
 

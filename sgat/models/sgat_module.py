@@ -21,12 +21,16 @@ class SgatModule(pl.LightningModule):
         self.train_dataloader_gen = train_dataloader_gen
         self.val_dataloader_gen = val_dataloader_gen
 
+        self.train_style = params.train_style
+
         if self.params.loss_fn == 'mse':
             self.loss_fn = nn.MSELoss(reduction='mean')
         elif self.params.loss_fn == 'cmp':
             self.loss_fn = cmp_loss
         elif self.params.loss_fn == 'bce':
             self.loss_fn = nn.BCELoss(reduction='mean')
+
+        self.dgsr_loss = nn.CrossEntropyLoss(reduction="mean")
 
     @staticmethod
     def add_base_args(parser):
@@ -46,6 +50,61 @@ class SgatModule(pl.LightningModule):
         return self.val_dataloader_gen(self.current_epoch)
 
     def training_step(self, batch, batch_idx):
+        if self.train_style == 'dgsr_softmax':
+            return self.training_step_dgsr(batch, batch_idx)
+        elif self.train_style == 'binary':
+            return self.training_step_binary(batch, batch_idx)
+        else:
+            raise NotImplementedError()
+
+    def validation_step(self, batch, batch_idx):
+        if self.train_style == 'dgsr_softmax':
+            return self.validation_step_dgsr(batch, batch_idx)
+        elif self.train_style == 'binary':
+            return self.validation_step_binary(batch, batch_idx)
+        else:
+            raise NotImplementedError()
+
+    """
+    Softmax over all items
+    """
+
+    def training_step_dgsr(self, batch, batch_idx):
+        # make prediction
+        predictions = self.predict_all_nodes(batch, batch['dgsr_target'].edge_index[0])
+        if len(predictions.shape) == 1:
+            predictions = predictions[None, :]
+
+        # only real edges in target
+        loss = self.dgsr_loss(predictions, batch['dgsr_target'].edge_index[1])
+
+        # log results for the neptune dashboard
+        self.log('train/loss', loss, on_step=True, batch_size=len(batch['dgsr_target'].edge_index[0]))
+
+        return loss
+
+    def validation_step_dgsr(self, batch, batch_idx):
+        # make prediction
+        predictions = self.predict_all_nodes(batch, batch['dgsr_target'].edge_index[0])
+        if len(predictions.shape) == 1:
+            predictions = predictions[None, :]
+
+        self.dgsr_loss = nn.CrossEntropyLoss(reduction="mean")
+
+        # only real edges in target
+        loss = self.dgsr_loss(predictions, batch['dgsr_target'].edge_index[1])
+
+        # log results for the neptune dashboard
+        self.log('val/loss', loss, on_step=True, batch_size=len(batch['dgsr_target'].edge_index[0]))
+
+        return loss
+
+
+    """
+    Binary classification edge yes/no per defined u, i pair
+    """
+
+    def training_step_binary(self, batch, batch_idx):
         # get targets
         predict_u = batch['u', 's', 'i'].edge_index[0]
         predict_i = batch['u', 's', 'i'].edge_index[1]
@@ -137,7 +196,7 @@ class SgatModule(pl.LightningModule):
         MAP = mean_average_precision(y_true, y_pred, k=12)
         return MAP
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step_binary(self, batch, batch_idx):
         # get targets
         supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
         supervised_predict_i = batch['u', 's', 'i'].edge_index[1]
@@ -193,5 +252,5 @@ class SgatModule(pl.LightningModule):
     #         self.log(str(k), float(v))
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
         return optimizer

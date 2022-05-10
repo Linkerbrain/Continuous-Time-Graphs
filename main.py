@@ -162,14 +162,15 @@ def main(params):
 
     # training
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
+
     trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
-                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
-                         accelerator=params.accelerator,
-                         devices=params.devices,
-                         log_every_n_steps=1, check_val_every_n_epoch=1 if not params.novalidate else int(10e9),
-                         callbacks=[checkpoint_callback],
-                         num_sanity_val_steps=2 if not params.novalidate else 0,
-                         strategy='ddp_sharded' if params.devices > 1 else None)
+                        precision=int(params.precision) if params.precision.isdigit() else params.precision,
+                        accelerator=params.accelerator,
+                        devices=params.devices,
+                        log_every_n_steps=1, check_val_every_n_epoch=1 if not params.novalidate else int(10e9),
+                        callbacks=[checkpoint_callback],
+                        num_sanity_val_steps=2 if not params.novalidate else 0,
+                        strategy='ddp_sharded' if params.devices > 1 else None)
 
     if not params.notrain:
         task = Task('Training model').start()
@@ -236,6 +237,9 @@ if __name__ == "__main__":
     parser_train.add_argument('--notest', action='store_true')
     parser_train.add_argument('--noshuffle', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
+    
+    parser_train.add_argument('--train_style', type=str, default='binary',
+                              choices=['binary', 'dgsr_softmax'])
 
     model_subparser = parser_train.add_subparsers(dest='model')
 

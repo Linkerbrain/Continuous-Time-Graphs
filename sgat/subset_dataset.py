@@ -15,7 +15,7 @@ class SubsetDataset(Dataset):
         pass
 
     def __init__(self, graph, params):
-        print("Entire Graph:", graph)
+        print("Working on Entire Graph:", graph)
         self.graph = graph
         self.transactions = graph[('u', 'b', 'i')].edge_index
 
@@ -41,19 +41,16 @@ class SubsetDataset(Dataset):
         x_graph = self._make_subset_graph(x_idx)
 
         # add target transactions ('u', 's', 'i')
-        self._add_target(x_graph, y_idx)
+        self._add_target_from_vocab(x_graph, y_idx)
 
-        # make eval transactions ('u', 'eval', 'i')
-        real_edges = x_graph['u', 's', 'i'].edge_index[:, x_graph['u', 's', 'i'].label==1]
-        num_items = self.graph['i'].code.shape[0]
-        graph_item_codes = x_graph['i'].code
+        # # make eval transactions ('u', 'eval', 'i')
+        # real_edges = x_graph['u', 's', 'i'].edge_index[:, x_graph['u', 's', 'i'].label==1]
+        # num_items = self.graph['i'].code.shape[0]
+        # graph_item_codes = x_graph['i'].code
 
-        add_random_eval_edges(x_graph, true_edges=real_edges, num_items=num_items, n=100, graph_item_codes=graph_item_codes)
+        # add_random_eval_edges(x_graph, true_edges=real_edges, num_items=num_items, n=100, graph_item_codes=graph_item_codes)
 
         return x_graph
-
-
-
 
     def _make_subset_graph(self, idx):
         """
@@ -77,7 +74,18 @@ class SubsetDataset(Dataset):
 
         return subdata
 
-    def _add_target(self, x_graph, idx):
+    def _add_target_from_vocab(self, x_graph, idx, num_fake_edges=100):
+        """
+        Makes target with real edges idx and random fake edges
+         defined as codes of vocab
+        """
+        subset_edges = self.ordered_trans[:, idx]
+        subset_edges = self._remap_edges_users_only(x_graph['u'].code, subset_edges)
+
+        # Save target
+        x_graph['dgsr_target'].edge_index = subset_edges
+
+    def _add_target_from_graph(self, x_graph, idx):
         """
         Makes target with real edges idx and random fake edges
          defined as indexes in x_graph
@@ -122,6 +130,24 @@ class SubsetDataset(Dataset):
 
         edge_index[0] = e0_ma.data[all_present]
         edge_index[1] = e1_ma.data[all_present]
+
+        if np.sum(all_present) == 0:
+            raise ValueError()
+
+        return edge_index
+
+    def _remap_edges_users_only(self, customers, edges):
+        """
+        Help function to map the user codes to the index in the graph
+        """
+        e0_ma = npi.indices(customers, edges[0], missing='mask')
+
+        all_present = ~e0_ma.mask
+
+        edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
+
+        edge_index[0] = e0_ma.data[all_present]
+        edge_index[1] = edges[1, all_present]
 
         if np.sum(all_present) == 0:
             raise ValueError()

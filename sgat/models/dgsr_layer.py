@@ -24,6 +24,9 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         """ layers """        
         self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
         self.w2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
+
+        self.w1b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
+        self.w2b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
         
         self.w3 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term User
         self.w4 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term Item
@@ -69,8 +72,11 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         betas = torch.sparse.softmax(e_iu / self.sqrt_d, dim=1) # (u, i)
         
         # pass messages
-        longterm_hu = pass_messages(item_messages, alphas, pKiu)
-        longterm_hi = pass_messages(user_messages, betas, pVui)
+        user_messages_b = self.w2b(u_embedded) # (u, h)
+        item_messages_b = self.w1b(i_embedded) # (i, h)
+
+        longterm_hu = pass_messages(item_messages_b, alphas, pKiu)
+        longterm_hi = pass_messages(user_messages_b, betas, pVui)
         
         return longterm_hu, longterm_hi
     
