@@ -8,6 +8,7 @@ import torch
 from pytorch_lightning.loggers import NeptuneLogger
 from torch.utils.data import Dataset
 
+import sgat.datasets.periodic_dataset
 from sgat import data, graphs, models, Task, task
 
 import pytorch_lightning as pl
@@ -65,7 +66,7 @@ def make_dataset(params):
 @task('Making data loaders')
 def make_dataloaders(graph, params):
     if params.sampler == 'periodic':
-        temporal_ds = graphs.TemporalDataset(graph, params)
+        temporal_ds = sgat.datasets.periodic_dataset.TemporalDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
         job = Task('Precomputing training set').start()
@@ -192,7 +193,7 @@ def subparse_model(subparser, name, module):
     NeighbourDataset.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    graphs.TemporalDataset.add_args(parser_periodic)
+    sgat.datasets.periodic_dataset.TemporalDataset.add_args(parser_periodic)
 
 
 if __name__ == "__main__":
