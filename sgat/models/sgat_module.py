@@ -40,7 +40,7 @@ class SgatModule(pl.LightningModule):
         self.log('train/loss', loss, on_step=True)
         self.log('train/n_customers', float(batch['u'].code.shape[0]))
         self.log('train/n_articles', float(batch['i'].code.shape[0]))
-        self.log('train/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]))
+        self.log('train/n_transactions', float(len(batch['u', 'b', 'i'].edge_index[0])))
         self.log('train/time', time.time())
 
         return loss
@@ -65,9 +65,9 @@ class SgatModule(pl.LightningModule):
 
         # get top k predictions (could be optimized)
         df = pd.DataFrame({
-            'u': map_predict_u.numpy(),
-            'i': map_predict_i.numpy(),
-            'p': map_predictions.numpy()})
+            'u': map_predict_u.cpu().numpy(),
+            'i': map_predict_i.cpu().numpy(),
+            'p': map_predictions.cpu().numpy()})
 
         y_pred = []
         for u, ip in df.groupby("u"):
@@ -86,7 +86,7 @@ class SgatModule(pl.LightningModule):
         self.log('val/loss', loss, batch_size=len(supervised_predict_u))
         self.log('val/n_customers', float(batch['u'].code.shape[0]), batch_size=len(supervised_predict_u))
         self.log('val/n_articles', float(batch['i'].code.shape[0]), batch_size=len(supervised_predict_u))
-        self.log('val/n_transactions', float(batch['u', 'b', 'i'].code.shape[0]), batch_size=len(supervised_predict_u))
+        self.log('val/n_transactions', float(len(batch['u', 's', 'i'].edge_index[0])), batch_size=len(supervised_predict_u))
         self.log('val/time', time.time(), batch_size=len(supervised_predict_u))
 
         return loss

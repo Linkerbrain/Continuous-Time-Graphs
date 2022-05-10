@@ -78,8 +78,8 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         """ TODO """
         
         # pass messages
-        shortterm_hu = torch.zeros((len(u), self.hidden_size)).float()
-        shortterm_hi = torch.zeros((len(i), self.hidden_size)).float()
+        shortterm_hu = torch.zeros((len(u), self.hidden_size)).float().to(rui.device)
+        shortterm_hi = torch.zeros((len(i), self.hidden_size)).float().to(rui.device)
         
         return shortterm_hu, shortterm_hi
         

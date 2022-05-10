@@ -26,7 +26,7 @@ def numpy_to_torch(data):
 
     for k in data.node_types + data.edge_types:
         for attribute, value in data[k].items():
-            if attribute == 'edge_index':
+            if attribute in ['edge_index', 'oui', 'oiu']:
                 dtype = torch.long
             elif value.dtype == np.float:
                 dtype = torch.float
@@ -178,10 +178,13 @@ def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, ma
                                  mask | dmask, new_neighbours)
 
 
-def add_random_eval_edges(graph, true_edges, num_items, n):
+def add_random_eval_edges(graph, true_edges, num_items, n, graph_item_codes):
     true_users = np.unique(true_edges[0, :])
 
     random_items = np.random.randint(0, num_items, size=(n))
+
+    # remap true items to absolute codes since random items are also absolute codes
+    true_edges[1, :] = graph_item_codes[true_edges[1, :]]
 
     # make every combination of true user and the random items
     eval_edges = [np.repeat(true_users, n),
@@ -287,7 +290,7 @@ class TemporalDataset(Dataset):
 
         # Add random edges
         real_edges = sampled_graph['u', 's', 'i'].edge_index[:, sampled_graph['u', 's', 'i'].label==1]
-        add_random_eval_edges(sampled_graph, true_edges=real_edges, num_items=self.graph['u'].code.shape[0], n=100)
+        add_random_eval_edges(sampled_graph, true_edges=real_edges, num_items=self.graph['i'].code.shape[0], n=100, graph_item_codes=sampled_graph['i'].code)
 
         return sampled_graph
 

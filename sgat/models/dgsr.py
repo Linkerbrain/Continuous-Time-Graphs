@@ -18,12 +18,20 @@ import colored_traceback.auto
 
 """
 lodewijk command
-python main.py --dataset beauty train --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
-python main.py --dataset beauty train --nologger --accelerator cpu DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 simple
+# DGRN CPU
+python main.py --dataset beauty train --accelerator cpu  --val_epochs 2 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
 
-python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
+# DGRN GPU
+python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 --val_epochs 5 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
 
+# MH model
 python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 15
+python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 50 MH periodic --chunk_size 10000000 --skip_chunks 15
+
+
+# DGRN CPU + NEIGHBOUR SAMPLING
+python main.py --dataset beauty train --nologger --accelerator cpu  --val_epochs 2 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 neighbour
+
 """
 
 class DGSR(SgatModule):
@@ -36,6 +44,8 @@ class DGSR(SgatModule):
         # layer settings
         parser.add_argument('--embedding_size', type=int, default=64)
         parser.add_argument('--num_DGRN_layers', type=int, default=2)
+
+        parser.add_argument('--shortterm', type=bool, default=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,8 +77,14 @@ class DGSR(SgatModule):
             self.DGSRLayers.append(DGSRLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max))
         
         # node updating
-        self.w3 = nn.Linear(self.hidden_size*3, self.hidden_size, bias=False)
-        self.w4 = nn.Linear(self.hidden_size*3, self.hidden_size, bias=False)
+        self.shortterm = self.params.shortterm
+
+        if self.shortterm:
+            print("[DEBUG] !! Using shortterm too!")
+
+        num_concats = 3 if self.shortterm else 2
+        self.w3 = nn.Linear(self.hidden_size*num_concats, self.hidden_size, bias=False)
+        self.w4 = nn.Linear(self.hidden_size*num_concats, self.hidden_size, bias=False)
         
         # recommendation
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
@@ -83,15 +99,15 @@ class DGSR(SgatModule):
         i_code = batch['i'].code
         edge_index = batch[('u', 'b', 'i')].edge_index
 
-        oui = torch.ones(len(batch[('u', 'b', 'i')].code)).long() # TODO
-        oiu = torch.ones(len(batch[('u', 'b', 'i')].code)).long() # TODO
+        oui = batch[('u', 'b', 'i')].oui
+        oiu = batch[('u', 'b', 'i')].oiu
 
         # embedding
         hu = self.user_embedding(u_code) # (u, h)
         hi = self.item_embedding(i_code) # (i, h)
         
         # parse graph
-        edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1]), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
+        edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1], device=edge_index.device), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
         user_per_trans, item_per_trans = edges.indices()
         
         rui = relative_order(oui, user_per_trans, n=self.user_max)
@@ -106,8 +122,12 @@ class DGSR(SgatModule):
             hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu)
             
             # concatenate information
-            hu_concat = torch.hstack((hLu, hSu, hu)).float()
-            hi_concat = torch.hstack((hLi, hSi, hi)).float()
+            if self.shortterm:
+                hu_concat = torch.hstack((hLu, hSu, hu)).float()
+                hi_concat = torch.hstack((hLi, hSi, hi)).float()
+            else:
+                hu_concat = torch.hstack((hLu, hu)).float()
+                hi_concat = torch.hstack((hLi, hi)).float()
             
             # make new embedding
             hu = torch.tanh(self.w3(hu_concat))

@@ -15,7 +15,8 @@ import pytorch_lightning as pl
 
 from sgat import logger
 from sgat.graphs import numpy_to_torch
-from sgat.simple_dataloader import SimpleDataLoaders
+from sgat.graph_enhance import add_oui_and_oiu
+from sgat.neighbour_dataset import NeighbourDataset
 from sgat.models import mh
 from sgat.models import dgsr
 
@@ -27,8 +28,12 @@ class PrecomputedDataset(Iterable, Sized):
     def __init__(self, batches, shuffle=True, n_batches=None):
         self.batches = []
         for batch in tqdm(batches, total=n_batches):
-            # add_oui(batch)
+            # add extra information
+            add_oui_and_oiu(batch)
+
+            # convert to pytorch
             batch = numpy_to_torch(batch)
+
             self.batches.append(batch)
         self.shuffle = shuffle
 
@@ -75,8 +80,19 @@ def make_dataloaders(graph, params):
         test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
         job.done()
 
-    elif params.sampler == 'simple':
-        train_data, val_data, test_data = SimpleDataLoaders(graph, params)
+    elif params.sampler == 'neighbour':
+        neighbour_ds = NeighbourDataset(graph, params)
+
+        # PrecomputedDataset converts the arrays in the graphs to torch
+        job = Task('Precomputing training set').start()
+        train_data = PrecomputedDataset(neighbour_ds.train_data(), shuffle=not params.noshuffle,
+                                        n_batches=neighbour_ds.train_data_len())
+        job.done()
+
+        job = Task('Precomputing validation and testing sets').start()
+        val_data = PrecomputedDataset(neighbour_ds.val_data(), shuffle=not params.noshuffle)
+        test_data = PrecomputedDataset(neighbour_ds.test_data(), shuffle=not params.noshuffle)
+        job.done()
     else:
         raise NotImplementedError()
 
@@ -131,12 +147,12 @@ def main(params):
             raise NotImplementedError("Need to use logger (neptune) for checkpoints")
 
     # training
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=2, monitor=params.monitor, mode='max')
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
     trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
-                         log_every_n_steps=1, check_val_every_n_epoch=1, callbacks=[checkpoint_callback],
+                         log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs, callbacks=[checkpoint_callback],
                          num_sanity_val_steps=2 if not params.novalidate else 0,
                          strategy=DDPStrategy(find_unused_parameters=False,
                                               static_graph=True) if params.devices > 1 else None)
@@ -178,6 +194,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--epochs', type=int, default=1000)
     # parser_train.add_argument('--batch_size', type=int, default=128)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
+    parser_train.add_argument('--val_epochs', type=int, default=10)
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
@@ -197,8 +214,8 @@ if __name__ == "__main__":
 
     gat_sampler_subparser = parser_dgsr.add_subparsers(dest='sampler')
 
-    parser_simple = gat_sampler_subparser.add_parser('simple')
-    SimpleDataLoaders.add_args(parser_simple)
+    parser_simple = gat_sampler_subparser.add_parser('neighbour')
+    NeighbourDataset.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     graphs.TemporalDataset.add_args(parser_periodic)

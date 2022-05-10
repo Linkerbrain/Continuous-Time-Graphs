@@ -7,26 +7,23 @@ import numpy_indexed as npi
 from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
 
-class SimpleDataLoaders(Dataset):
+from sgat.graphs import add_random_eval_edges
+
+class SubsetDataset(Dataset):
+    @staticmethod
+    def add_args(parser):
+        pass
+
     def __init__(self, graph, params):
-        print("Graph:", graph)
-
+        print("Entire Graph:", graph)
+        self.graph = graph
         self.transactions = graph[('u', 'b', 'i')].edge_index
-
-        self.n_trans = self.transactions.shape[1] # 394 908 for beauty
-        self.n_trans_test = 1000
-        self.n_trans_train = self.n_trans - self.n_trans_test
-
-        # rolling window x, y, v over train transactions
-        # taking first x trans for embedding, then the y after for loss, then the eval for evaluation
-        self.n_trans_x = 10000
-        self.n_trans_y = 1000
-        self.n_trans_eval = 1000
 
         trans_t = graph[('u', 'b', 'i')].t
         trans_order = np.argsort(trans_t)
 
         self.ordered_trans = self.transactions[:, trans_order]
+        self.ordered_trans_t = trans_t[trans_order]
 
         # train transactions are all transactions until test
         # self.train_transactions = ordered_trans[:, :-self.n_trans_test]
@@ -40,13 +37,23 @@ class SimpleDataLoaders(Dataset):
         Makes graph with the x_idx index transactions,
         and target with the y_idx index transactions
         """
-        # sample transactions
+        # sample transactions ('u', 'b', 'i')
         x_graph = self._make_subset_graph(x_idx)
 
-        # ren
+        # add target transactions ('u', 's', 'i')
         self._add_target(x_graph, y_idx)
 
+        # make eval transactions ('u', 'eval', 'i')
+        real_edges = x_graph['u', 's', 'i'].edge_index[:, x_graph['u', 's', 'i'].label==1]
+        num_items = self.graph['i'].code.shape[0]
+        graph_item_codes = x_graph['i'].code
+
+        add_random_eval_edges(x_graph, true_edges=real_edges, num_items=num_items, n=100, graph_item_codes=graph_item_codes)
+
         return x_graph
+
+
+
 
     def _make_subset_graph(self, idx):
         """
@@ -66,7 +73,7 @@ class SimpleDataLoaders(Dataset):
         subdata['u'].code = customers
         subdata['i'].code = articles
 
-        subdata[('u', 'b', 'i')] = subset_edges
+        subdata[('u', 'b', 'i')].edge_index = subset_edges
 
         return subdata
 
@@ -75,13 +82,8 @@ class SimpleDataLoaders(Dataset):
         Makes target with real edges idx and random fake edges
          defined as indexes in x_graph
         """
-        # 
         subset_edges = self.ordered_trans[:, idx]
-
-        customers = npi.indices(x_graph['u'].code, subset_edges[0])
-        articles = npi.indices(x_graph['i'].code, subset_edges[1])
-
-        subset_edges = self._remap_edges(customers, articles, subset_edges)
+        subset_edges = self._remap_edges(x_graph['u'].code, x_graph['i'].code, subset_edges)
 
         # make fake edges
         fake_edges = np.zeros_like(subset_edges)
@@ -92,6 +94,8 @@ class SimpleDataLoaders(Dataset):
         # Pick random items from all the items available in the graph.
         # TODO: Pick only from the local neighbourhood of each user
         fake_edges[1, :] = np.random.randint(x_graph['i'].code.shape[0], size=subset_edges.shape[1])
+
+        print("target fake edges:", fake_edges)
 
         # Remove fake edges that are the same as real edges to prevent contradicting supervisions signals
         fake_edges = fake_edges[:, ~npi.contains(subset_edges, fake_edges, axis=1)]
@@ -115,14 +119,11 @@ class SimpleDataLoaders(Dataset):
         all_present = ~e0_ma.mask & ~e1_ma.mask
         
         edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
+
         edge_index[0] = e0_ma.data[all_present]
         edge_index[1] = e1_ma.data[all_present]
 
+        if np.sum(all_present) == 0:
+            raise ValueError()
+
         return edge_index
-
-
-
-
-    @staticmethod
-    def add_args(parser):
-        pass

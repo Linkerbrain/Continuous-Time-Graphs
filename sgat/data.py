@@ -14,12 +14,34 @@ HM_PATH = "hm"
 
 AMAZON_DATASETS = ['beauty', 'cd', 'games', 'movie']
 
+# Prep
+def refine_time(data):
+    """
+    assures items bought by a user don't have the exact same time
+    5, 1, 2, 2, 8 -> 1, 2, 3, 5, 8
+    """
+    
+    data = data.sort_values(['t'], kind='mergesort')
+    time_seq = data['t'].values
+    time_gap = 1
+    
+    for i, da in enumerate(time_seq[0:-1]):
+        if time_seq[i] == time_seq[i+1] or time_seq[i] > time_seq[i+1]:
+            time_seq[i+1] = time_seq[i+1] + time_gap
+            time_gap += 1
+            
+    data['t'] = time_seq
+    
+    return  data
 
 # noinspection PyTypeChecker
 def amazon_dataset(name):
     task = Task(f"Loading amazon/{name} dataset").start()
 
     df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"}, axis=1)
+
+    df = df.groupby('u').apply(refine_time).reset_index(drop=True)
+    df['t'] = df['t'].astype('int64')
 
     customers = df['u'].unique()
     articles = df['i'].unique()
