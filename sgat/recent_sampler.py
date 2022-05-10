@@ -11,7 +11,6 @@ class RecentSampler():
         """
 
         self.u_connections, self.u_transactions, self.i_connections, self.i_transactions = self._make_dictionaries(df, n)
-        pass
 
     def _make_dictionaries(self, df, n=20):
         # -- build User most recent transaction lists --

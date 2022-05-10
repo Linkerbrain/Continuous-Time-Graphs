@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 
 from sgat.subset_dataset import SubsetDataset
-from sgat.recent_sampler import neighbour_idx_of
+from sgat.recent_sampler import RecentSampler
 
 class NeighbourDataset(SubsetDataset):
     @staticmethod
@@ -22,9 +22,11 @@ class NeighbourDataset(SubsetDataset):
         super().__init__(graph, params, *args, **kwargs)
 
         # we currently make dataframe into edge index and back, this can be smoothed out obv
-        df = pd.DataFrame({"u": self.ordered_trans[0, :],
+        self.df = pd.DataFrame({"u": self.ordered_trans[0, :],
                             "i": self.ordered_trans[1, :],
                             "t": self.ordered_trans_t})
+
+        self.rs = RecentSampler(self.df, n=20)
 
         self._prepare_batch_idxs()
 
@@ -40,7 +42,7 @@ class NeighbourDataset(SubsetDataset):
         self.test_data = []
 
         for u in users:
-            sample = neighbour_idx_of(u)
+            sample = rs.neighbour_idx_of(u)
 
             if not sample["valid"]:
                 print(f"{u} does not have enough transactions, skipping...")
