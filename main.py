@@ -5,26 +5,19 @@ from typing import Sized, Iterable
 
 import numpy as np
 import torch
-import pytorch_lightning
 from pytorch_lightning.loggers import NeptuneLogger
-from pytorch_lightning.strategies import DDPStrategy
 from torch.utils.data import Dataset
-from torch_geometric.loader import DataLoader
 
 from sgat import data, graphs, models, Task, task
 
 import pytorch_lightning as pl
 
 from sgat import logger
-from sgat.graphs import numpy_to_torch
+from sgat.graphs import numpy_to_torch, add_oui_and_oiu
 
-from sgat.graph_enhance import add_oui_and_oiu
-from sgat.neighbour_dataset import NeighbourDataset
+from sgat.datasets.neighbour_dataset import NeighbourDataset
 
 from sgat.models.sgat_module import SgatModule
-
-from sgat.models import mh
-from sgat.models import dgsr
 
 from sgat.no_traceback import no_traceback
 
@@ -66,8 +59,6 @@ def make_dataset(params):
     else:
         raise NotImplementedError()
 
-    # mutates graph
-    graphs.add_transaction_order(graph)
     return graph
 
 

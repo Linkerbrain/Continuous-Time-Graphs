@@ -1,10 +1,7 @@
-import numpy as np
 import pandas as pd
 
-import pickle
-
-from sgat.subset_dataset import SubsetDataset
-from sgat.recent_sampler import RecentSampler
+from sgat.datasets.subset_dataset import SubsetDataset
+from sgat.datasets.recent_sampler import RecentSampler
 
 class NeighbourDataset(SubsetDataset):
     @staticmethod
