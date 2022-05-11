@@ -82,7 +82,7 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         return longterm_hu, longterm_hi
 
-    def shortterm(self, u_embedded, i_embedded, edge_index, oui, oiu):
+    def shortterm(self, u_embedded, i_embedded, edge_index):
         # --- short term ---
         user_per_trans, item_per_trans = edge_index.indices()
 
@@ -133,6 +133,6 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
 
         # shortterm
-        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, rui, riu)
+        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index)
 
         return hLu, hSu, hLi, hSi
