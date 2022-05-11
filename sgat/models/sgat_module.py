@@ -64,7 +64,7 @@ class SgatModule(pl.LightningModule):
             predict_i = batch['u', 's', 'i'].edge_index[1]
 
             # forward
-            predictions = self.forward(batch, predict_u, predict_i)
+            predictions = self.forward(batch, predict_u, predict_i, predict_i_ptr=True)
 
             labels = batch['u', 's', 'i'].label
 
@@ -230,7 +230,7 @@ class SgatModule(pl.LightningModule):
             ranks = ranking['i'].loc[ranking['i'].isin(purchases)].index
             all_ranks += list(ranks.values)
 
-        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks)
+        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks, torch.unique(map_predict_u).cpu().numpy())
 
         batch_size = len(map_predict_u)
 

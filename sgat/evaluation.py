@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 
 
@@ -40,9 +42,9 @@ def mean_average_precision(y_true, y_pred, k=12):
     return map_at_k
 
 
-def compute_eval_metrics(all_ranks):
+def compute_eval_metrics(all_ranks, users):
     """
-    Copy-paste from the DGSR code (DGSR_utils.py) with some edits to work in our framework.
+    Copy-paste from the DGSR code (DGSR_utils.py) with edits to work in our framework.
 
     Their code calculates the dcg but calls it ndgg for some reason.
 
@@ -54,23 +56,38 @@ def compute_eval_metrics(all_ranks):
 
     """
     recall5, recall10, recall20, dcg5, dcg10, dcg20 = [], [], [], [], [], []
-    for rank in all_ranks:
+    recall5_tmp, recall10_tmp, recall20_tmp, dcg5_tmp, dcg10_tmp, dcg20_tmp = [], [], [], [], [], []
+    last_u = users[0]
+    for u, rank in itertools.chain(zip(users, all_ranks), [(None, None)]):
+        if u != last_u:
+            recall5.append(sum(recall5_tmp)/len(recall5_tmp))
+            recall10.append(sum(recall10_tmp)/len(recall10_tmp))
+            recall20.append(sum(recall20_tmp)/len(recall20_tmp))
+            dcg5.append(sum(dcg5_tmp))
+            dcg10.append(sum(dcg10_tmp))
+            dcg20.append(sum(dcg20_tmp))
+            recall5_tmp, recall10_tmp, recall20_tmp, dcg5_tmp, dcg10_tmp, dcg20_tmp = [], [], [], [], [], []
+        last_u = u
+
+        if u is None and rank is None:
+            break
+
         if rank < 20:
-            dcg20.append(1 / np.log2(rank + 2))
-            recall20.append(1)
+            dcg20_tmp.append(1 / np.log2(rank + 2))
+            recall20_tmp.append(1)
         else:
-            dcg20.append(0)
-            recall20.append(0)
+            dcg20_tmp.append(0)
+            recall20_tmp.append(0)
         if rank < 10:
-            dcg10.append(1 / np.log2(rank + 2))
-            recall10.append(1)
+            dcg10_tmp.append(1 / np.log2(rank + 2))
+            recall10_tmp.append(1)
         else:
-            dcg10.append(0)
-            recall10.append(0)
+            dcg10_tmp.append(0)
+            recall10_tmp.append(0)
         if rank < 5:
-            dcg5.append(1 / np.log2(rank + 2))
-            recall5.append(1)
+            dcg5_tmp.append(1 / np.log2(rank + 2))
+            recall5_tmp.append(1)
         else:
-            dcg5.append(0)
-            recall5.append(0)
+            dcg5_tmp.append(0)
+            recall5_tmp.append(0)
     return np.mean(recall5), np.mean(recall10), np.mean(recall20), np.mean(dcg5), np.mean(dcg10), np.mean(dcg20)
