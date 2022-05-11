@@ -142,6 +142,8 @@ class SgatModule(pl.LightningModule):
         return MAP
 
     def neighbour_MAP(self, batch):
+        #TODO: Check
+
         map_predict_u = batch['u', 'n', 'i'].edge_index[0]
         map_predict_i = batch['u', 'n', 'i'].edge_index[1]
 
