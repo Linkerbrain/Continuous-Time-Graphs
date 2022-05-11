@@ -101,8 +101,7 @@ class PeriodicDataset(Dataset):
         sampled_graph = sample_neighbourhood(embedding_graph, supervision_graph['u'].ptr, self.hops)
 
         # Add random edges
-        real_edges = sampled_graph['u', 's', 'i'].edge_index[:, sampled_graph['u', 's', 'i'].label==1]
-        add_random_eval_edges(sampled_graph, true_edges=real_edges, num_items=self.graph['i'].code.shape[0], n=100, graph_item_codes=sampled_graph['i'].code)
+        add_random_eval_edges(sampled_graph, num_items=self.graph['i'].code.shape[0])
 
         return sampled_graph
 

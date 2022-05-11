@@ -9,6 +9,7 @@ from torch_geometric.data import HeteroData
 
 from sgat.graphs import add_random_eval_edges
 
+
 class SubsetDataset(Dataset):
     @staticmethod
     def add_args(parser):
@@ -32,6 +33,7 @@ class SubsetDataset(Dataset):
         # print('train trans:', self.train_transactions.shape)
         # print('test trans:', self.test_transactions.shape)
 
+    # noinspection PyTypeChecker
     def create_batch(self, x_idx, y_idx):
         """
         Makes graph with the x_idx index transactions,
@@ -43,15 +45,13 @@ class SubsetDataset(Dataset):
         # add target transactions ('u', 's', 'i')
         self._add_target_from_vocab(x_graph, y_idx)
 
-        # # make eval transactions ('u', 'eval', 'i')
-        # real_edges = x_graph['u', 's', 'i'].edge_index[:, x_graph['u', 's', 'i'].label==1]
-        # num_items = self.graph['i'].code.shape[0]
-        # graph_item_codes = x_graph['i'].code
-
-        # add_random_eval_edges(x_graph, true_edges=real_edges, num_items=num_items, n=100, graph_item_codes=graph_item_codes)
+        add_random_eval_edges(graph=x_graph, num_items=self.graph['i'].code.shape[0],
+                              true_u_index=x_graph['target'].u_index,
+                              true_i_code=x_graph['target'].i_code)
 
         return x_graph
 
+    # noinspection PyTypeChecker
     def _make_subset_graph(self, idx):
         """
         Makes graph only covering the transactions with index `idx`
@@ -83,7 +83,8 @@ class SubsetDataset(Dataset):
         subset_edges = self._remap_edges_users_only(x_graph['u'].code, subset_edges)
 
         # Save target
-        x_graph['dgsr_target'].edge_index = subset_edges
+        x_graph['target'].u_index = subset_edges[0]
+        x_graph['target'].i_code = subset_edges[1]
 
     def _add_target_from_graph(self, x_graph, idx):
         """
@@ -115,7 +116,6 @@ class SubsetDataset(Dataset):
         target.label = np.ones(target.edge_index.shape[1], dtype=np.float)
         target.label[-fake_edges.shape[1]:] = 0
 
-
     def _remap_edges(self, customers, articles, edges):
         """
         Help function to map the codes to the index in the graph
@@ -125,7 +125,7 @@ class SubsetDataset(Dataset):
         e1_ma = npi.indices(articles, edges[1], missing='mask')
 
         all_present = ~e0_ma.mask & ~e1_ma.mask
-        
+
         edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
 
         edge_index[0] = e0_ma.data[all_present]
