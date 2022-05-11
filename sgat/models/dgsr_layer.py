@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from .dgsr_utils import sparse_dense_mul, pass_messages, relative_order, get_last
+from .dgsr_utils import sparse_dense_mul, pass_messages, relative_order, get_last, pass_messages_no_possitional
 
 class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
     def __init__(self,
@@ -82,7 +82,7 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         return longterm_hu, longterm_hi
 
-    def shortterm(self, u_embedded, i_embedded, edge_index):
+    def shortterm(self, u_embedded, i_embedded, edge_index, graph):
         # --- short term ---
         user_per_trans, item_per_trans = edge_index.indices()
 
@@ -90,12 +90,12 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         item_messages = self.w1(i_embedded) # (i, h)
 
         # Get last item
-        last_item = get_last(user_per_trans, item_per_trans, graph['i'].x)
+        last_item = get_last(user_per_trans, item_per_trans, graph['i'].code).to(torch.int)
         last_item_embedding = self.last_item_embedding(last_item)
         last_item = self.w3(last_item_embedding)
 
         # Get last user from items
-        last_user = get_last(item_per_trans, user_per_trans, graph['u'].x)
+        last_user = get_last(item_per_trans, user_per_trans, graph['u'].code).to(torch.int)
         last_user_embedding = self.last_user_embedding(last_user)
         last_user = self.w4(last_user_embedding)
 
@@ -120,19 +120,19 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
 
         # pass messages
-        shortterm_hu = pass_messages_no_possitional(item_messages, alphas)
-        shortterm_hi = pass_messages_no_possitional(user_messages, betas)
+        shortterm_hu = pass_messages_no_possitional(item_messages, alphas.to(torch.double))
+        shortterm_hi = pass_messages_no_possitional(user_messages, betas.to(torch.double))
 
 
         return shortterm_hu, shortterm_hi
 
 
-    def forward(self, u_emb, i_emb, edge_index, rui, riu):
+    def forward(self, u_emb, i_emb, edge_index, rui, riu, graph):
         # propagate information
         # longterm
         hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
 
         # shortterm
-        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index)
+        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph)
 
         return hLu, hSu, hLi, hSi

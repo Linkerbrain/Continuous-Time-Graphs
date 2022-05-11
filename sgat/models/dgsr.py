@@ -55,6 +55,7 @@ class DGSR(SgatModule):
 
         """ user_num, item_num, hidden_size, user_max, item_max, num_DGRN_layers """
         """ init """
+        self.graph = self.graph
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
 
@@ -117,7 +118,7 @@ class DGSR(SgatModule):
         hu_list = [hu]
         hi_list = [hi]
         for DGSR in self.DGSRLayers:
-            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu)
+            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph)
 
             # concatenate information
             if self.shortterm:

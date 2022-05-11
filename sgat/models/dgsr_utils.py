@@ -55,7 +55,7 @@ def pass_messages_no_possitional(messages, adjacency):
 
     # add messages
     output.index_add_(0, user_per_trans, messages[item_per_trans] * alpha)
-    
+
     # add embeddings
     output.index_add_(0, user_per_trans, alpha)
 
@@ -89,6 +89,5 @@ def get_last(by_who, what, code):
     last_indices = torch.index_select(what, 0, cum_ind)
 
     # get item id's from graph
-    last_ids = torch.index_select(code, 0, last_indices)
-
+    last_ids = torch.index_select(torch.Tensor(code), 0, last_indices)
     return last_ids
