@@ -194,8 +194,12 @@ def add_random_eval_edges(graph, num_items, true_u_index=None, true_i_code=None,
     eval_u = np.hstack((eval_edges[0], true_u_index))
     eval_i_codes = np.hstack((eval_edges[1], true_i_code))
 
+    label = np.zeros(eval_i_codes.shape[0])
+    label[n:] = 1
+
     graph['eval'].u_index = eval_u
     graph['eval'].i_code = eval_i_codes
+    graph['eval'].label = label
 
 
 def add_oui_and_oiu(graph):
