@@ -1,0 +1,10 @@
+Namespace(data='Beauty', batchSize=50, hidden_size=50, epoch=20, lr=0.001, l2=1e-05, user_update='rnn', item_update='rnn', user_long='orgat', item_long='orgat', user_short='att', item_short='att', feat_drop=0.3, attn_drop=0.3, layer_num=3, item_max_length=50, user_max_length=50, k_hop=2, gpu='0', last_item=False, record=True, val=False, model_record=True)
+Logging to results/Beauty_ba_50_G_0_dim_50_ulong_orgat_ilong_orgat_US_att_IS_att_La_False_UM_50_IM_50_K_2_layer_3_l2_1e-05
+train number: 50427
+test number: 51033
+user number: 52204
+item number: 57289
+Traceback (most recent call last):
+  File "/home/ook/ai/dl2/DGSR-reproduction/old/new_main.py", line 89, in <module>
+    f = open(opt.data+'_neg', 'rb')
+FileNotFoundError: [Errno 2] No such file or directory: 'Beauty_neg'

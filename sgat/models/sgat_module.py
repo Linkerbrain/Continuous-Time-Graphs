@@ -24,13 +24,13 @@ class SgatModule(pl.LightningModule):
 
         if self.params.loss_fn == 'mse':
             self.loss_fn = nn.MSELoss(reduction='mean')
-            assert self.params.train_style == 'binary'
+            assert self.params.train_style != 'dgsr_softmax'
         elif self.params.loss_fn == 'cmp':
             self.loss_fn = cmp_loss
-            assert self.params.train_style == 'binary'
+            assert self.params.train_style != 'dgsr_softmax'
         elif self.params.loss_fn == 'bce':
             self.loss_fn = nn.BCELoss(reduction='mean')
-            assert self.params.train_style == 'binary'
+            assert self.params.train_style != 'dgsr_softmax'
         elif self.params.loss_fn == 'ce':
             self.loss_fn = nn.CrossEntropyLoss(reduction="mean")
             assert self.params.train_style == 'dgsr_softmax'
@@ -42,7 +42,7 @@ class SgatModule(pl.LightningModule):
         parser.add_argument('--no_MAP_random', action='store_true')
         parser.add_argument('--no_MAP_neighbour', action='store_true')
         parser.add_argument('--train_style', type=str, default='binary',
-                            choices=['binary', 'dgsr_softmax'])
+                            choices=['binary', 'dgsr_softmax', 'eval'])
 
     @staticmethod
     def add_args(parser):
@@ -59,7 +59,6 @@ class SgatModule(pl.LightningModule):
             """
             Binary classification edge yes/no per defined u, i pair
             """
-            # get targets
             predict_u = batch['u', 's', 'i'].edge_index[0]
             predict_i = batch['u', 's', 'i'].edge_index[1]
 
@@ -95,6 +94,23 @@ class SgatModule(pl.LightningModule):
 
             # For the logging
             predict_i = predict_i_code
+        elif self.params.train_style == 'eval':
+            predict_u = batch['eval'].u_index
+            predict_i_code = batch['eval'].i_code
+
+            # forward
+            predictions = self.forward(batch, predict_u, predict_i_code, predict_i_ptr=False)
+
+            labels = batch['eval'].label
+
+            # backward
+            loss = self.loss_fn(predictions, labels)
+
+            positives_mean = torch.mean(predictions[labels.bool()])
+            negatives_mean = torch.mean(predictions[~labels.bool()])
+
+            # For the logging
+            predict_i = predict_i_code
         else:
             raise NotImplementedError()
 
@@ -110,7 +126,7 @@ class SgatModule(pl.LightningModule):
         self.log(f'{namespace}/n_target_customers', float(len(torch.unique(predict_u))), batch_size=batch_size)
 
         self.log(f'{namespace}/n_transactions', float(len(batch['u', 'b', 'i'].edge_index[0])), batch_size=batch_size)
-        self.log(f'{namespace}/n_targets', batch_size, batch_size=batch_size)
+        self.log(f'{namespace}/n_targets', float(batch_size), batch_size=batch_size)
 
         self.log(f'{namespace}/time', time.time(), batch_size=batch_size)
         
@@ -220,13 +236,18 @@ class SgatModule(pl.LightningModule):
             'i': map_predict_i_codes.cpu().numpy(),
             'p': predictions.cpu().numpy()})
 
-        # get targets
-        supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
-        supervised_predict_i_codes = batch['i'].code[batch['u', 's', 'i'].edge_index[1]]
+        # # get targets
+        # supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
+        # supervised_predict_i_codes = batch['i'].code[batch['u', 's', 'i'].edge_index[1]]
+
+        # target_df = pd.DataFrame({
+        #     'u': supervised_predict_u[batch['u', 's', 'i'].label == 1],
+        #     'i': supervised_predict_i_codes[batch['u', 's', 'i'].label == 1],
+        # })
 
         target_df = pd.DataFrame({
-            'u': supervised_predict_u[batch['u', 's', 'i'].label == 1],
-            'i': supervised_predict_i_codes[batch['u', 's', 'i'].label == 1],
+            'u': map_predict_u[batch['eval'].label == 1].cpu().numpy(),
+            'i': map_predict_i_codes[batch['eval'].label == 1].cpu().numpy(),
         })
 
         all_ranks = []

@@ -8,3 +8,6 @@ lightning_logs
 .ipynb_checkpoints
 .pytest_cache
 hm
+old/Newdata
+old/results
+old/jup

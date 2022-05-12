@@ -21,8 +21,8 @@ def print_border():
 def print_file_line(stringa, stringb):
     parts = stringa.split('"')
 
-    if len(parts) < 3:
-        return
+    # if len(parts) < 3:
+    #     return
 
     stringa_fancy = '' + parts[0] + b.ENDC \
         + b.FAIL + "\\".join(parts[1].split("\\")[-3:]) + b.ENDC \
