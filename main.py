@@ -215,7 +215,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--epochs', type=int, default=1000)
     # parser_train.add_argument('--batch_size', type=int, default=128)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
-    parser_train.add_argument('--val_epochs', type=int, default=10)
+    # parser_train.add_argument('--val_epochs', type=int, default=10)
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)

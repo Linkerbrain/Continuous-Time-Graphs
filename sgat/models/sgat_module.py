@@ -78,8 +78,8 @@ class SgatModule(pl.LightningModule):
             """
             Softmax over all items
             """
-            predict_u = batch['dgsr_target'].edge_index[0]
-            predict_i = batch['dgsr_target'].edge_index[1]
+            predict_u = batch['target'].u_index
+            predict_i_code = batch['target'].i_code
 
             # make prediction
             predictions = self.predict_all_nodes(batch, predict_u)
@@ -87,11 +87,14 @@ class SgatModule(pl.LightningModule):
                 predictions = predictions[None, :]
 
             # only real edges in target
-            loss = self.loss_fn(predictions, predict_i)
+            loss = self.loss_fn(predictions, predict_i_code)
 
-            positives_mean = torch.mean(predictions[:, predict_i])
-            negatives_mean = (torch.sum(predictions) - positives_mean * len(predict_i)) / (
-                        predictions.shape[1] - len(predict_i))
+            positives_mean = torch.mean(predictions[:, predict_i_code])
+            negatives_mean = (torch.sum(predictions) - positives_mean * len(predict_i_code)) / (
+                    predictions.shape[1] - len(predict_i_code))
+
+            # For the logging
+            predict_i = predict_i_code
         else:
             raise NotImplementedError()
 
@@ -117,8 +120,8 @@ class SgatModule(pl.LightningModule):
         return loss
 
     def random_MAP(self, batch):
-        map_predict_u = batch['u', 'eval', 'i'].edge_index[0]
-        map_predict_i_codes = batch['u', 'eval', 'i'].edge_index[1]
+        map_predict_u = batch['eval'].u_index
+        map_predict_i_codes = batch['eval'].i_code
 
         # make predictions
         map_predictions = self.forward(batch, map_predict_u, map_predict_i_codes, predict_i_ptr=False)
@@ -143,6 +146,8 @@ class SgatModule(pl.LightningModule):
         return MAP
 
     def neighbour_MAP(self, batch):
+        # TODO: Check
+
         map_predict_u = batch['u', 'n', 'i'].edge_index[0]
         map_predict_i = batch['u', 'n', 'i'].edge_index[1]
 
@@ -203,8 +208,8 @@ class SgatModule(pl.LightningModule):
         # Do standard validation as well to compute the MAP scores
         loss = self.validation_step(batch, batch_idx, namespace=namespace)
 
-        map_predict_u = batch['u', 'eval', 'i'].edge_index[0]
-        map_predict_i_codes = batch['u', 'eval', 'i'].edge_index[1]
+        map_predict_u = batch['eval'].u_index
+        map_predict_i_codes = batch['eval'].i_code
 
         # make predictions
         predictions = self.forward(batch, map_predict_u, map_predict_i_codes, predict_i_ptr=False)
@@ -231,7 +236,8 @@ class SgatModule(pl.LightningModule):
             ranks = ranking['i'].loc[ranking['i'].isin(purchases)].index
             all_ranks += list(ranks.values)
 
-        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks, torch.unique(map_predict_u).cpu().numpy())
+        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks, torch.unique(
+            map_predict_u).cpu().numpy())
 
         batch_size = len(map_predict_u)
 

@@ -175,26 +175,27 @@ def sample_neighbourhood_(graph, node_type, root_sources, root_targets, hops, ma
                                  mask | dmask, new_neighbours)
 
 
-def add_random_eval_edges(graph, true_edges, num_items, n, graph_item_codes):
 
-    true_users = np.unique(true_edges[0, :])
+def add_random_eval_edges(graph, num_items, true_u_index=None, true_i_code=None, n=100):
+    if true_u_index is None or true_i_code is None:
+        assert true_u_index is None and true_i_code is None
+        true_edges = graph['u', 's', 'i'].edge_index[:, graph['u', 's', 'i'].label == 1]
+        true_u_index = true_edges[0]
+        true_i_code = graph['i'].code[true_edges[0]]
 
-    random_items = np.random.randint(0, num_items, size=(n))
+    true_users = np.unique(true_u_index)
 
-    # remap true items to absolute codes since random items are also absolute codes
-    true_edges[1, :] = graph_item_codes[true_edges[1, :]]
+    random_item_codes = np.random.randint(0, num_items, size=(n,))
 
     # make every combination of true user and the random items
-    eval_edges = [np.repeat(true_users, n),
-                np.tile(random_items, len(true_users))]
+    eval_edges = [np.repeat(true_users, n), np.tile(random_item_codes, len(true_users))]
 
-    eval_u = np.hstack((eval_edges[0], true_edges[0]))
-    eval_i = np.hstack((eval_edges[1], true_edges[1]))
+    # Put the true items after the random items
+    eval_u = np.hstack((eval_edges[0], true_u_index))
+    eval_i_codes = np.hstack((eval_edges[1], true_i_code))
 
-    eval_and_true_edges = np.vstack((eval_u, eval_i))
-
-    # TODO: Don't put it in edge_index that doesnt make sense it's codes
-    graph['u', 'eval', 'i'].edge_index = eval_and_true_edges # eval_and_true_edges
+    graph['eval'].u_index = eval_u
+    graph['eval'].i_code = eval_i_codes
 
 
 def add_oui_and_oiu(graph):

@@ -60,28 +60,29 @@ class DGSR(SgatModule):
 
         """ user_num, item_num, hidden_size, user_max, item_max, num_DGRN_layers """
         """ init """
+        self.graph = self.graph
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
-        
+
         # Max number of neighbours used in sampling TODO
         self.user_max = self.params.user_max
         self.item_max = self.params.item_max
-        
+
         self.hidden_size = self.params.embedding_size
         self.sqrt_d = np.sqrt(self.hidden_size)
 
         self.num_DGRN_layers = self.params.num_DGRN_layers
-        
+
         """ layers """
         # embedding
         self.user_embedding = nn.Embedding(self.user_vocab_num, self.hidden_size)
         self.item_embedding = nn.Embedding(self.item_vocab_num, self.hidden_size)
-        
+
         # propogation
         self.DGSRLayers = nn.ModuleList()
         for _ in range(self.num_DGRN_layers):
             self.DGSRLayers.append(DGSRLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max))
-        
+
         # node updating
         self.shortterm = self.params.shortterm
 
@@ -91,7 +92,7 @@ class DGSR(SgatModule):
         num_concats = 3 if self.shortterm else 2
         self.w3 = nn.Linear(self.hidden_size*num_concats, self.hidden_size, bias=False)
         self.w4 = nn.Linear(self.hidden_size*num_concats, self.hidden_size, bias=False)
-        
+
         # recommendation
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
 
@@ -108,22 +109,22 @@ class DGSR(SgatModule):
         # embedding
         hu = self.user_embedding(u_code) # (u, h)
         hi = self.item_embedding(i_code) # (i, h)
-        
+
         # parse graph
         edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1], device=edge_index.device), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
         user_per_trans, item_per_trans = edges.indices()
-        
+
         rui = relative_order(oui, user_per_trans, n=self.user_max)
         riu = relative_order(oiu, item_per_trans, n=self.item_max)
-        
+
         # propogation
-        
+
         # iterate over Dynamic Graph Sequential Recommendation Layers
         hu_list = [hu]
         hi_list = [hi]
         for DGSR in self.DGSRLayers:
-            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu)
-            
+            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph)
+
             # concatenate information
             if self.shortterm:
                 hu_concat = torch.hstack((hLu, hSu, hu)).float()
@@ -131,11 +132,11 @@ class DGSR(SgatModule):
             else:
                 hu_concat = torch.hstack((hLu, hu)).float()
                 hi_concat = torch.hstack((hLi, hi)).float()
-            
+
             # make new embedding
             hu = torch.tanh(self.w3(hu_concat))
             hi = torch.tanh(self.w4(hi_concat))
-            
+
             # save user embedding at every timestep
             hu_list.append(hu)
             hi_list.append(hi)
@@ -167,7 +168,7 @@ class DGSR(SgatModule):
     def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
         # propagate graph
         hu_list, hi_list = self.forward_graph(batch)
-        
+
         # recommendation
 
         # get u embeddings and i embeddings (2 lists that belong elementwise, contain duplicates)
@@ -184,5 +185,5 @@ class DGSR(SgatModule):
 
         # convert scores to a probability if it is likely to be bought
         predictions = torch.sigmoid(scores)
-        
+
         return predictions
