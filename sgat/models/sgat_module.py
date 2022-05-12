@@ -110,6 +110,7 @@ class SgatModule(pl.LightningModule):
         self.log(f'{namespace}/n_targets', batch_size, batch_size=batch_size)
 
         self.log(f'{namespace}/time', time.time(), batch_size=batch_size)
+        
         self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size)
         self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size)
 

@@ -32,6 +32,11 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs
 # DGRN CPU + NEIGHBOUR SAMPLING
 python main.py --dataset beauty train --train_style dgsr_softmax --accelerator cpu --val_epochs 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 neighbour
 python main.py --dataset beauty train --train_style dgsr_softmax --accelerator gpu --devices 1 --val_epochs 1 DGSR --user_max 50 --item_max 50 --embedding_size 50 --num_DGRN_layers=2 neighbour
+python main.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --train_style dgsr_softmax --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 --loss_fn ce neighbour
+
+
+# DEBUG
+python main_datadebug.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --train_style dgsr_softmax --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 --loss_fn ce neighbour
 
 """
 
