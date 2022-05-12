@@ -6,6 +6,8 @@ import torch
 from torch_geometric.data import HeteroData
 import numpy_indexed as npi
 
+from sgat.np_utils import cumcount
+
 
 def numpy_to_torch(data):
     """
@@ -22,14 +24,36 @@ def numpy_to_torch(data):
     graph = HeteroData()
 
     for k in data.node_types + data.edge_types:
+        # When converting an edge index to a sparse matrix, and coalescing, its indices get sorted
+        # We need to do this ahead of time so we can also sort the corresponding metadata like the time
+        if 'edge_index' in data[k].keys():
+            argsorted_ind = np.lexsort((data[k]["edge_index"][1], data[k]["edge_index"][0]))
+        else:
+            argsorted_ind = None
+
         for attribute, value in data[k].items():
+            # choose datatype
             if attribute in ['edge_index', 'oui', 'oiu']:
                 dtype = torch.long
+            elif type(value) is int:
+                dtype= torch.long
             elif value.dtype == np.float:
                 dtype = torch.float
             else:
                 dtype = None
+
+            # sort metadata and indices
+            if argsorted_ind is not None:
+                if value.ndim == 1:
+                    value = value[argsorted_ind]
+                elif value.ndim == 2:
+                    value = value[:, argsorted_ind]
+                else:
+                    raise NotImplementedError()
+
+            # save converted data
             graph[k][attribute] = torch.tensor(value, dtype=dtype)
+
     return graph
 
 def check_graph(graph):
@@ -197,24 +221,24 @@ def add_random_eval_edges(graph, num_items, true_u_index=None, true_i_code=None,
     graph['eval'].u_index = eval_u
     graph['eval'].i_code = eval_i_codes
 
-
 def add_oui_and_oiu(graph):
-    """
-    Adds the following edge attributes:
 
-    Add attribute 'oui' which means a transaction is the oui'th transaction from the user.
-    Add attribute 'oiu' which means a user is the oiu'th purchaser of the item
-    """
     edges = graph[('u', 'b', 'i')].edge_index
-
-    df = pd.DataFrame({'u':edges[0], 'i':edges[1]})
-
-    # KLOPT NIKS VAN
-    # sort in same way as pytorch will do
-    df = df.sort_values(['u', 'i'])
-
-    oui = df.groupby("u")['i'].rank("first")
-    oiu = df.groupby("i")['u'].rank("first")
-
-    graph[('u', 'b', 'i')].oui = oui.values
-    graph[('u', 'b', 'i')].oiu = oiu.values
+    edges_t = graph[('u', 'b', 'i')].t
+    # prepare arrays
+    oui = np.zeros_like(edges_t)
+    oiu = np.zeros_like(edges_t)
+    
+    # sort by time
+    trans_order = np.argsort(edges_t)
+    
+    # oui = user's xth transaction, so the cumcount of that users occurence
+    sorted_users = edges[0, :][trans_order]
+    oui[trans_order] = cumcount(sorted_users) + 1
+    
+    # oiu = item's xth transaction, so the cumcount of that items occurence
+    sorted_items = edges[1, :][trans_order]
+    oiu[trans_order] = cumcount(sorted_items) + 1
+    
+    graph[('u', 'b', 'i')].oui = oui
+    graph[('u', 'b', 'i')].oiu = oiu

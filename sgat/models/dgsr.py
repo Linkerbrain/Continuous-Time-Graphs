@@ -13,6 +13,7 @@ from .dgsr_utils import relative_order
 from .dgsr_layer import DGSRLayer
 
 import colored_traceback.auto
+from sgat import logger
 # import sys
 # sys.tracebacklimit = 2
 
@@ -38,15 +39,19 @@ python main.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --tr
 # DEBUG
 python main_datadebug.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --train_style dgsr_softmax --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 --loss_fn ce neighbour
 
+
+# NEW SOTA
+# cpu debug:
+python main.py --dataset beauty train --nologger --accelerator cpu --val_epochs 1 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 64 --num_DGRN_layers=1 --loss_fn ce neighbour --n_max_trans 20 --m_order 1 --num_user 100
+
+# gpu beast mode:
+python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 2 --epochs 100 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 16 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 10 --m_order 2 --num_user 500
+
 """
 
 class DGSR(SgatModule):
     @staticmethod
     def add_args(parser):
-        # max number of neighbours each node can have
-        parser.add_argument('--user_max', type=int, default=10)
-        parser.add_argument('--item_max', type=int, default=10)
-
         # layer settings
         parser.add_argument('--embedding_size', type=int, default=64)
         parser.add_argument('--num_DGRN_layers', type=int, default=2)
@@ -56,7 +61,7 @@ class DGSR(SgatModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        print("[DGSR] Starting initiation.")
+        logger.info("[DGSR] Starting initiation.")
 
         """ user_num, item_num, hidden_size, user_max, item_max, num_DGRN_layers """
         """ init """
@@ -65,8 +70,11 @@ class DGSR(SgatModule):
         self.item_vocab_num = self.graph['i'].code.shape[0]
 
         # Max number of neighbours used in sampling TODO
-        self.user_max = self.params.user_max
-        self.item_max = self.params.item_max
+        if self.params.n_max_trans is None:
+            raise ValueError("n (max_transactions) should be set in the dataset settings so the DGSR model can use it too")
+
+        self.user_max = self.params.n_max_trans
+        self.item_max = self.params.n_max_trans
 
         self.hidden_size = self.params.embedding_size
         self.sqrt_d = np.sqrt(self.hidden_size)
@@ -87,7 +95,9 @@ class DGSR(SgatModule):
         self.shortterm = self.params.shortterm
 
         if self.shortterm:
-            print("[DEBUG] !! Using shortterm too!")
+            logger.info("[DGSR] Using shortterm too")
+        else:
+            logger.info("[DGSR] using no Shortterm messages")
 
         num_concats = 3 if self.shortterm else 2
         self.w3 = nn.Linear(self.hidden_size*num_concats, self.hidden_size, bias=False)
@@ -95,8 +105,6 @@ class DGSR(SgatModule):
 
         # recommendation
         self.wP = nn.Linear(self.hidden_size, self.hidden_size*(self.num_DGRN_layers+1), bias=False)
-
-        print("[DGSR] Succesfully initialised DGSR network")
 
     def forward_graph(self, batch):
         u_code = batch['u'].code
@@ -158,12 +166,9 @@ class DGSR(SgatModule):
         predict_i_embed = self.wP(self.item_embedding.weight)
 
         # get the dot product of each element
-        scores = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)
+        scores = predict_u_graph_embed @ predict_i_embed.T
 
-        # convert scores to a probability if it is likely to be bought
-        predictions = torch.sigmoid(scores)
-
-        return predictions
+        return scores
 
     def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
         # propagate graph

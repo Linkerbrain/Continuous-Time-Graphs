@@ -19,9 +19,6 @@ def print_border():
     print(b.WEIRD + "- - - - - - - - - " + b.ENDC)
 
 def print_file_line(stringa, stringb):
-    if "DGSR-reproduction" not in stringa:
-        return
-
     parts = stringa.split('"')
 
     if len(parts) < 3:
@@ -46,7 +43,7 @@ def print_error_line(string):
 
     print(b.FAIL + parts[0] + b.ENDC + ': ')
 
-def no_traceback(func, params):
+def cool_traceback(func, params):
     try:
         func(params)
     except Exception as e:
@@ -54,8 +51,9 @@ def no_traceback(func, params):
 
         print_border()
 
-        for i, a in enumerate(data[1:-1:2]):
-            print_file_line(data[i], data[i+1])
+        for i, a in enumerate(data[:-1]):
+            if "DGSR-reproduction" in data[i]:
+                print_file_line(data[i], data[i+1])
 
         print(flush=True)
         print_error_line(data[-1])

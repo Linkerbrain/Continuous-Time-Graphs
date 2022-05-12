@@ -9,6 +9,9 @@ from torch_geometric.data import HeteroData
 
 from sgat.graphs import add_random_eval_edges
 
+from sgat.graphs import numpy_to_torch, add_oui_and_oiu
+
+from sgat import logger
 
 class SubsetDataset(Dataset):
     @staticmethod
@@ -16,7 +19,7 @@ class SubsetDataset(Dataset):
         pass
 
     def __init__(self, graph, params):
-        print("Working on Entire Graph:", graph)
+        logger.info("Entire Graph:" +str(graph))
         self.graph = graph
         self.transactions = graph[('u', 'b', 'i')].edge_index
 
@@ -34,22 +37,29 @@ class SubsetDataset(Dataset):
         # print('test trans:', self.test_transactions.shape)
 
     # noinspection PyTypeChecker
-    def create_batch(self, x_idx, y_idx):
+    def create_subgraph(self, x_idx, y_idx):
         """
         Makes graph with the x_idx index transactions,
         and target with the y_idx index transactions
         """
         # sample transactions ('u', 'b', 'i')
-        x_graph = self._make_subset_graph(x_idx)
+        subgraph = self._make_subset_graph(x_idx)
 
         # add target transactions ('u', 's', 'i')
-        self._add_target_from_vocab(x_graph, y_idx)
+        self._add_target_from_vocab(subgraph, y_idx)
 
-        add_random_eval_edges(graph=x_graph, num_items=self.graph['i'].code.shape[0],
-                              true_u_index=x_graph['target'].u_index,
-                              true_i_code=x_graph['target'].i_code)
+        # add eval transactions ['eval'].u_index, ['eval'].i_code
+        add_random_eval_edges(graph=subgraph, num_items=self.graph['i'].code.shape[0],
+                              true_u_index=subgraph['target'].u_index,
+                              true_i_code=subgraph['target'].i_code)
 
-        return x_graph
+        # add oui and oiu to ('u', 'b', 'i')
+        add_oui_and_oiu(subgraph)
+
+        # convert arrays to torch tensors
+        subgraph_data = numpy_to_torch(subgraph)
+
+        return subgraph_data
 
     # noinspection PyTypeChecker
     def _make_subset_graph(self, idx):
@@ -57,20 +67,25 @@ class SubsetDataset(Dataset):
         Makes graph only covering the transactions with index `idx`
         """
         subset_edges = self.ordered_trans[:, idx]
+        subset_edges_t = self.ordered_trans_t[idx]
 
         # Index = new, Value = code
         customers = np.unique(subset_edges[0])
         articles = np.unique(subset_edges[1])
 
-        subset_edges = self._remap_edges(customers, articles, subset_edges)
+        subset_edges, subset_edges_t = self._remap_edges(customers, articles, subset_edges, subset_edges_t, remap_items=True)
 
         # build object
         subdata = HeteroData()
 
         subdata['u'].code = customers
+        subdata['u'].num_nodes = len(customers)
         subdata['i'].code = articles
+        subdata['i'].num_nodes = len(articles)
 
+        # save edges and time codes
         subdata[('u', 'b', 'i')].edge_index = subset_edges
+        subdata[('u', 'b', 'i')].t = subset_edges_t
 
         return subdata
 
@@ -80,76 +95,72 @@ class SubsetDataset(Dataset):
          defined as codes of vocab
         """
         subset_edges = self.ordered_trans[:, idx]
-        subset_edges = self._remap_edges_users_only(x_graph['u'].code, subset_edges)
+        subset_edges_t = self.ordered_trans_t[idx]
+
+        # dont remap items since they are defined as codes
+        subset_edges, subset_edges_t = self._remap_edges(x_graph['u'].code, None, subset_edges, subset_edges_t, remap_items=False)
 
         # Save target
         x_graph['target'].u_index = subset_edges[0]
         x_graph['target'].i_code = subset_edges[1]
 
-    def _add_target_from_graph(self, x_graph, idx):
-        """
-        Makes target with real edges idx and random fake edges
-         defined as indexes in x_graph
-        """
-        subset_edges = self.ordered_trans[:, idx]
-        subset_edges = self._remap_edges(x_graph['u'].code, x_graph['i'].code, subset_edges)
+        x_graph['target'].t = subset_edges_t
 
-        # make fake edges
-        fake_edges = np.zeros_like(subset_edges)
-
-        # same users as real edges
-        fake_edges[0, :] = subset_edges[0, :]
-
-        # Pick random items from all the items available in the graph.
-        # TODO: Pick only from the local neighbourhood of each user
-        fake_edges[1, :] = np.random.randint(x_graph['i'].code.shape[0], size=subset_edges.shape[1])
-
-        print("target fake edges:", fake_edges)
-
-        # Remove fake edges that are the same as real edges to prevent contradicting supervisions signals
-        fake_edges = fake_edges[:, ~npi.contains(subset_edges, fake_edges, axis=1)]
-
-        # Save target
-        target = x_graph[('u', 's', 'i')]
-        target.edge_index = np.concatenate([subset_edges, fake_edges], axis=1)
-
-        target.label = np.ones(target.edge_index.shape[1], dtype=np.float)
-        target.label[-fake_edges.shape[1]:] = 0
-
-    def _remap_edges(self, customers, articles, edges):
+    def _remap_edges(self, customers, articles, edges, edges_t, remap_items=True):
         """
         Help function to map the codes to the index in the graph
         """
         # Make the edges point to the smaller set of users/items
         e0_ma = npi.indices(customers, edges[0], missing='mask')
-        e1_ma = npi.indices(articles, edges[1], missing='mask')
 
-        all_present = ~e0_ma.mask & ~e1_ma.mask
-
-        edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
-
-        edge_index[0] = e0_ma.data[all_present]
-        edge_index[1] = e1_ma.data[all_present]
-
-        if np.sum(all_present) == 0:
-            raise ValueError()
-
-        return edge_index
-
-    def _remap_edges_users_only(self, customers, edges):
-        """
-        Help function to map the user codes to the index in the graph
-        """
-        e0_ma = npi.indices(customers, edges[0], missing='mask')
-
-        all_present = ~e0_ma.mask
+        if remap_items:
+            e1_ma = npi.indices(articles, edges[1], missing='mask')
+            all_present = ~e0_ma.mask & ~e1_ma.mask
+        else:
+            all_present = ~e0_ma.mask
 
         edge_index = np.zeros((2, np.sum(all_present)), dtype=np.int64)
 
         edge_index[0] = e0_ma.data[all_present]
-        edge_index[1] = edges[1, all_present]
+
+        if remap_items:
+            edge_index[1] = e1_ma.data[all_present]
+        else:
+            edge_index[1] = edges[1, all_present]
+
+        edges_t = edges_t[all_present]
 
         if np.sum(all_present) == 0:
             raise ValueError()
 
-        return edge_index
+        return edge_index, edges_t
+
+    # def _add_target_from_graph(self, x_graph, idx):
+    #     """
+    #     Makes target with real edges idx and random fake edges
+    #      defined as indexes in x_graph
+    #     """
+    #     subset_edges = self.ordered_trans[:, idx]
+    #     subset_edges = self._remap_edges(x_graph['u'].code, x_graph['i'].code, subset_edges)
+
+    #     # make fake edges
+    #     fake_edges = np.zeros_like(subset_edges)
+
+    #     # same users as real edges
+    #     fake_edges[0, :] = subset_edges[0, :]
+
+    #     # Pick random items from all the items available in the graph.
+    #     # TODO: Pick only from the local neighbourhood of each user
+    #     fake_edges[1, :] = np.random.randint(x_graph['i'].code.shape[0], size=subset_edges.shape[1])
+
+    #     print("target fake edges:", fake_edges)
+
+    #     # Remove fake edges that are the same as real edges to prevent contradicting supervisions signals
+    #     fake_edges = fake_edges[:, ~npi.contains(subset_edges, fake_edges, axis=1)]
+
+    #     # Save target
+    #     target = x_graph[('u', 's', 'i')]
+    #     target.edge_index = np.concatenate([subset_edges, fake_edges], axis=1)
+
+    #     target.label = np.ones(target.edge_index.shape[1], dtype=np.float)
+    #     target.label[-fake_edges.shape[1]:] = 0

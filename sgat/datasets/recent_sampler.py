@@ -1,9 +1,12 @@
+from tkinter import N
 import numpy as np
 import pandas as pd
 import pickle
 
+from sgat import logger
+
 class RecentSampler():
-    def __init__(self, ordered_trans, ordered_trans_t, n):
+    def __init__(self, ordered_trans, ordered_trans_t, n, m):
         """
         ordered_trans is edge_index [[u, u, u, u], [i, i, i, i]]
         ordered_trans_t is corresponding time [t, t, t, t]
@@ -17,6 +20,11 @@ class RecentSampler():
         self.df = pd.DataFrame({"u": self.ordered_trans[0, :],
                             "i": self.ordered_trans[1, :],
                             "t": self.ordered_trans_t})
+
+        # number of max transactions per user
+        self.n = n
+        # max order neighbourhood to sample
+        self.m = m
 
         self.u_connections, self.u_transactions, self.i_connections, self.i_transactions = self._make_dictionaries(self.df, n)
 
@@ -40,8 +48,6 @@ class RecentSampler():
             
             u_transaction_list.append(zero_padded_t)
 
-        print("[RecentSampler] Created user dictionaries")
-
         # -- build Item most recent transaction lists --
         i_connection_list = [np.zeros(n)]
         i_transaction_list = [np.zeros(n)]
@@ -61,8 +67,6 @@ class RecentSampler():
             
             i_transaction_list.append(zero_padded_t)
 
-        print("[RecentSampler] Created item dictionaries")
-
         # -- parse to array --
 
         u_connections = np.stack(u_connection_list).astype(np.int32)
@@ -71,13 +75,11 @@ class RecentSampler():
         i_connections = np.stack(i_connection_list).astype(np.int32)
         i_transactions = np.stack(i_transaction_list).astype(np.int32)
 
-        print(f"[RecentSampler] Created database of {len(u_connections)-1} users and {len(i_connections)-1} items")
-
         return u_connections, u_transactions, i_connections, i_transactions
 
     # get user network
 
-    def get_user_network(self, index, m=2):
+    def get_user_network(self, index):
         # u_m and i_m are the sets of explored nodes
         u_m = np.array([0]) # 0 is dummy
         i_m = np.array([0])
@@ -93,7 +95,7 @@ class RecentSampler():
         new_transactions = self.u_transactions[u_temp].flatten()
         transactions_m = np.union1d(transactions_m, new_transactions)
             
-        for j in range(m):
+        for j in range(self.m):
             new_users = np.unique(self.i_connections[i_temp])
             u_temp = np.union1d(u_temp, new_users)
             
@@ -122,9 +124,9 @@ class RecentSampler():
         # -1 to offset back (it was offset to allow for dummy 0)
         return u_m[1:]-1, i_m[1:]-1, transactions_m[1:]
 
-    def neighbour_idx_of(self, target_u, m=1):
+    def neighbour_idx_of(self, target_u):
         # get subset
-        u, i, t_idxs = self.get_user_network(target_u, m=m)
+        u, i, t_idxs = self.get_user_network(target_u)
 
         # choose most recent item for testing
         # second most recent item for validation
@@ -134,7 +136,7 @@ class RecentSampler():
 
         user_trans = np.where(sub[0]==target_u)[0]
 
-        if len(user_trans) < 5:
+        if len(user_trans) < 5: # todo make parameter
             return {"valid":False}
 
         # testing

@@ -132,7 +132,8 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         # longterm
         hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
 
-        # shortterm
-        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph)
+        # shortterm (has some gpu issues WIP)
+        # hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph)
+        hSu, hSi = None, None
 
         return hLu, hSu, hLi, hSi

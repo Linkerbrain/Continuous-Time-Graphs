@@ -20,7 +20,7 @@ from sgat.datasets.neighbour_dataset import NeighbourDataset
 
 from sgat.models.sgat_module import SgatModule
 
-from sgat.no_traceback import no_traceback
+from sgat.cool_traceback import cool_traceback
 
 from tqdm.auto import tqdm
 
@@ -80,17 +80,18 @@ def make_dataloaders(graph, params):
         job.done()
 
     elif params.sampler == 'neighbour':
+        job = Task('Sampling neighbour dataset').start()
         neighbour_ds = NeighbourDataset(graph, params)
+        job.done()
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Precomputing training set').start()
-        train_data = PrecomputedDataset(neighbour_ds.train_data(), shuffle=not params.noshuffle,
-                                        n_batches=neighbour_ds.train_data_len())
+        job = Task('Creating neighbour training set').start()
+        train_data = neighbour_ds.make_train_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
         job.done()
 
         job = Task('Precomputing validation and testing sets').start()
-        val_data = PrecomputedDataset(neighbour_ds.val_data(), shuffle=not params.noshuffle)
-        test_data = PrecomputedDataset(neighbour_ds.test_data(), shuffle=not params.noshuffle)
+        val_data = neighbour_ds.make_val_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
+        test_data = neighbour_ds.make_test_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
         job.done()
     else:
         raise NotImplementedError()
@@ -159,7 +160,7 @@ def main(params):
                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
                         accelerator=params.accelerator,
                         devices=params.devices,
-                        log_every_n_steps=1, check_val_every_n_epoch=1 if not params.novalidate else int(10e9),
+                        log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
                         callbacks=[checkpoint_callback],
                         num_sanity_val_steps=2 if not params.novalidate else 0,
                         strategy='ddp_sharded' if params.devices > 1 else None)
@@ -213,9 +214,9 @@ if __name__ == "__main__":
     # parser_train.add_argument('--model', type=str, default='DGSR', choices={'DGSR', "GAT"})
     parser_train.add_argument('--days', type=int, default=None, help='subset of the data to train and test with')
     parser_train.add_argument('--epochs', type=int, default=1000)
-    # parser_train.add_argument('--batch_size', type=int, default=128)
+    parser_train.add_argument('--batch_size', type=int, default=16)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
-    # parser_train.add_argument('--val_epochs', type=int, default=10)
+    parser_train.add_argument('--val_epochs', type=int, default=10)
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
@@ -230,7 +231,6 @@ if __name__ == "__main__":
     parser_train.add_argument('--noshuffle', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
 
-
     model_subparser = parser_train.add_subparsers(dest='model')
 
     subparse_model(model_subparser, 'DGSR', models.dgsr.DGSR)
@@ -242,4 +242,6 @@ if __name__ == "__main__":
 
     logger.info(params)
 
-    no_traceback(main, params)
+    cool_traceback(main, params)
+
+    # main(params)

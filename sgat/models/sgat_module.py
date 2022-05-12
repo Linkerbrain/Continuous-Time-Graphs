@@ -78,7 +78,7 @@ class SgatModule(pl.LightningModule):
             """
             Softmax over all items
             """
-            predict_u = batch['target'].u_index
+            predict_u = batch['target'].u_index # + batch['u'].ptr[:-1]
             predict_i_code = batch['target'].i_code
 
             # make prediction
