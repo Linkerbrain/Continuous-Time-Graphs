@@ -133,7 +133,6 @@ class SgatModule(pl.LightningModule):
         self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size)
         self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size)
 
-        import pdb; pdb.set_trace()
         return loss
 
     def random_MAP(self, batch):
