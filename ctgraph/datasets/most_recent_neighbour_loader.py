@@ -6,6 +6,8 @@ from ctgraph.datasets.recent_sampler import RecentSampler
 from torch_geometric.loader import DataLoader
 from ctgraph import logger
 
+from tqdm.auto import tqdm
+
 class MostRecentNeighbourLoader(SubsetLoader):
     """
     MostRecentNeighbourLoader samples and loads the most recent m-hop neighbourhood of each user
@@ -16,16 +18,18 @@ class MostRecentNeighbourLoader(SubsetLoader):
     def add_args(parser):
         parser.add_argument('--n_max_trans', type=int, default=20)
         parser.add_argument('--m_order', type=int, default=2)
-
-        parser.add_argument('--num_users', type=int, default=100)
+        parser.add_argument('--num_users', type=int, default=None)
 
     def __init__(self, graph, params, *args, **kwargs):
         # Initiate subset dataset which sorts the dataset (self.ordered_trans)
         super().__init__(graph, params, *args, **kwargs)
 
+        if params.num_users is None:
+            num_users = graph['u'].code.shape[0]
+
         self.rs = RecentSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
 
-        self._prepare_idxs(params.num_users)
+        self._prepare_idxs(num_users)
 
     """
     Neighbour sampling
@@ -40,7 +44,7 @@ class MostRecentNeighbourLoader(SubsetLoader):
         self.test_idx = []
 
         fails = 0
-        for u in users:
+        for u in tqdm(users):
             sample = self.rs.neighbour_idx_of(u)
 
             if not sample["valid"]:

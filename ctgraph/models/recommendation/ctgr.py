@@ -77,7 +77,8 @@ class CTGR(RecommendationModule):
     def predict_all_nodes(self, predict_u):
         raise NotImplementedError()
 
-    def forward(self, graph, predict_u, predict_i, predict_i_ptr):
+    def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
+        assert predict_i is None or predict_i_ptr is not None
 
 
         if not self.params.homogenous:

@@ -43,7 +43,7 @@ def mean_average_precision(y_true, y_pred, k=12):
     return map_at_k
 
 
-def compute_eval_metrics(all_ranks, users):
+def compute_eval_metrics(all_ranks, users, progress=lambda x, *args, **kwargs: x):
     """
     Copy-paste from the DGSR code (DGSR_utils.py) with edits to work in our framework.
 
@@ -59,7 +59,7 @@ def compute_eval_metrics(all_ranks, users):
     recall5, recall10, recall20, dcg5, dcg10, dcg20 = [], [], [], [], [], []
     recall5_tmp, recall10_tmp, recall20_tmp, dcg5_tmp, dcg10_tmp, dcg20_tmp = [], [], [], [], [], []
     last_u = users[0]
-    for u, rank in tqdm(itertools.chain(zip(users, all_ranks), [(None, None)]), total=len(users)+1):
+    for u, rank in progress(itertools.chain(zip(users, all_ranks), [(None, None)]), total=len(users)+1):
         if u != last_u:
             recall5.append(sum(recall5_tmp)/len(recall5_tmp))
             recall10.append(sum(recall10_tmp)/len(recall10_tmp))
