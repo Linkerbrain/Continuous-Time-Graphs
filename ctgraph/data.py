@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 from torch_geometric.data import HeteroData
 
-from sgat import instagram, features, logger, Task, task
+from ctgraph import instagram, features, logger, Task, task
 
 import torch_geometric.transforms as T
 

@@ -1,14 +1,10 @@
-import time
-
-import pandas as pd
 import torch
-from pytorch_lightning import LightningModule
 from torch import nn
 from torch_geometric.nn import HeteroConv, SAGEConv
 
-from sgat.models.sgat_module import SgatModule
+from ctgraph.models.recommendation.module import RecommendationModule
 
-class MH(SgatModule):
+class MH(RecommendationModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_vocab_num = self.graph['u'].code.shape[0]

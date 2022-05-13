@@ -2,7 +2,7 @@ import numpy as np
 import numpy_indexed as npi
 from torch.utils.data import Dataset
 
-from sgat.graphs import make_subset, sample_neighbourhood, add_random_eval_edges
+from ctgraph.graphs import make_subset, sample_neighbourhood, add_random_eval_edges
 
 
 class PeriodicDataset(Dataset):

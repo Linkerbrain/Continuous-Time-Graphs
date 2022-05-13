@@ -1,16 +1,11 @@
-import time
-
 import numpy_indexed as npi
-import pandas as pd
 import torch
-from pytorch_lightning import LightningModule
 from torch import nn
-from torch_geometric.nn import HeteroConv, SAGEConv
 
-from sgat.models.sgat_module import SgatModule
+from ctgraph.models.recommendation.module import RecommendationModule
 
 
-class Dummy(SgatModule):
+class Dummy(RecommendationModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.linear = nn.Linear(1,1)

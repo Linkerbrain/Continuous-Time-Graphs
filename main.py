@@ -8,19 +8,17 @@ import torch
 from pytorch_lightning.loggers import NeptuneLogger
 from torch.utils.data import Dataset
 
-import sgat.datasets.periodic_dataset
-from sgat import data, graphs, models, Task, task
+import ctgraph.datasets.periodic_dataset
+from ctgraph import data, models, Task, task
 
 import pytorch_lightning as pl
 
-from sgat import logger
-from sgat.graphs import numpy_to_torch, add_oui_and_oiu
+from ctgraph import logger
+from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
 
-from sgat.datasets.neighbour_dataset import NeighbourDataset
+from ctgraph.datasets.neighbour_dataset import NeighbourDataset
 
-from sgat.models.sgat_module import SgatModule
-
-from sgat.cool_traceback import cool_traceback
+from ctgraph.cool_traceback import cool_traceback
 
 from tqdm.auto import tqdm
 
@@ -66,7 +64,7 @@ def make_dataset(params):
 @task('Making data loaders')
 def make_dataloaders(graph, params):
     if params.sampler == 'periodic':
-        temporal_ds = sgat.datasets.periodic_dataset.PeriodicDataset(graph, params)
+        temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
 
         # PrecomputedDataset converts the arrays in the graphs to torch
         job = Task('Precomputing training set').start()
@@ -106,11 +104,11 @@ def make_dataloaders(graph, params):
 @task('Making model')
 def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen):
     if params.model == 'DGSR':
-        model = models.dgsr.DGSR(graph, params, train_dataloader_gen, val_dataloader_gen)
+        model = ctgraph.models.recommendation.dgsr.DGSR(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'MH':
-        model = models.mh.MH(graph, params, train_dataloader_gen, val_dataloader_gen)
+        model = ctgraph.models.recommendation.mh.MH(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'DUMMY':
-        model = models.dummy.Dummy(graph, params, train_dataloader_gen, val_dataloader_gen)
+        model = ctgraph.models.recommendation.dummy.Dummy(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
         raise NotImplementedError()
     return model
@@ -186,7 +184,7 @@ def main(params):
 
 def subparse_model(subparser, name, module):
     parser_module = subparser.add_parser(name)
-    models.sgat_module.SgatModule.add_base_args(parser_module)
+    ctgraph.models.recommendation.sgat_module.RecommendationModule.add_base_args(parser_module)
     module.add_args(parser_module)
 
     gat_sampler_subparser = parser_module.add_subparsers(dest='sampler')
@@ -195,7 +193,7 @@ def subparse_model(subparser, name, module):
     NeighbourDataset.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    sgat.datasets.periodic_dataset.PeriodicDataset.add_args(parser_periodic)
+    ctgraph.datasets.periodic_dataset.PeriodicDataset.add_args(parser_periodic)
 
 
 if __name__ == "__main__":
@@ -233,9 +231,9 @@ if __name__ == "__main__":
 
     model_subparser = parser_train.add_subparsers(dest='model')
 
-    subparse_model(model_subparser, 'DGSR', models.dgsr.DGSR)
-    subparse_model(model_subparser, 'MH', models.mh.MH)
-    subparse_model(model_subparser, 'DUMMY', models.dummy.Dummy)
+    subparse_model(model_subparser, 'DGSR', ctgraph.models.recommendation.dgsr.DGSR)
+    subparse_model(model_subparser, 'MH', ctgraph.models.recommendation.mh.MH)
+    subparse_model(model_subparser, 'DUMMY', ctgraph.models.recommendation.dummy.Dummy)
 
     # Now parse the actual params
     params = parser.parse_args()

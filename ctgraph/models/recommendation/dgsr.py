@@ -1,19 +1,14 @@
-import time
-
 import torch
 import numpy as np
 
-from pytorch_lightning import LightningModule
 from torch import nn
-from torch_geometric.nn import HeteroConv, SAGEConv
 
-from sgat.models.sgat_module import SgatModule
+from ctgraph.models.recommendation.module import RecommendationModule
 
 from .dgsr_utils import relative_order
 from .dgsr_layer import DGSRLayer
 
-import colored_traceback.auto
-from sgat import logger
+from ctgraph import logger
 # import sys
 # sys.tracebacklimit = 2
 
@@ -56,7 +51,7 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs
 
 """
 
-class DGSR(SgatModule):
+class DGSR(RecommendationModule):
     @staticmethod
     def add_args(parser):
         # layer settings

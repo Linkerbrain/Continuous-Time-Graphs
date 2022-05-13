@@ -4,8 +4,8 @@ from torch_geometric.loader.utils import filter_hetero_data
 
 import numpy_indexed as npi
 
-from sgat.data import amazon_dataset
-from sgat.graphs import sample_neighbourhood, compare_graphs, edges_codified, check_graph
+from ctgraph.data import amazon_dataset
+from ctgraph.graphs import sample_neighbourhood, compare_graphs, edges_codified, check_graph
 
 GRAPH = amazon_dataset('beauty')
 

@@ -7,11 +7,11 @@ import numpy_indexed as npi
 from torch.utils.data import Dataset
 from torch_geometric.data import HeteroData
 
-from sgat.graphs import add_random_eval_edges
+from ctgraph.graphs import add_random_eval_edges
 
-from sgat.graphs import numpy_to_torch, add_oui_and_oiu
+from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
 
-from sgat import logger
+from ctgraph import logger
 
 class SubsetDataset(Dataset):
     @staticmethod

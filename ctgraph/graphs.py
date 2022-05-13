@@ -6,7 +6,7 @@ import torch
 from torch_geometric.data import HeteroData
 import numpy_indexed as npi
 
-from sgat.np_utils import cumcount
+from ctgraph.np_utils import cumcount
 
 
 def numpy_to_torch(data):
