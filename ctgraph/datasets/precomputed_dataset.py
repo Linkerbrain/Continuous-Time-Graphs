@@ -3,6 +3,8 @@ from torch.utils.data import Dataset
 from typing import Sized, Iterable
 
 import tqdm
+import os
+from os import path
 
 from torch_geometric.loader import DataLoader
 
@@ -46,8 +48,15 @@ class PrecomputedDataset(Dataset):
     def get_loaders(self):
         return self.train_loader, self.val_loader, self.test_loader
 
-    def load_from_disk(self):
-        return NotImplementedError()
+    @staticmethod
+    def load_from_disk(name, data_dir="./precomputed_data/"):
+        location = path.join(data_dir, name)
 
-    def save_to_disk(self):
-        return NotImplementedError()
+        return torch.load(location)
+
+    def save_to_disk(self, data_dir="./precomputed_data/"):
+        location = path.join(data_dir, 'test.torch')
+        if not path.exists(data_dir):
+            os.mkdir(data_dir)
+
+        torch.save(self, location)

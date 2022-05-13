@@ -24,6 +24,8 @@ from ctgraph.cool_traceback import cool_traceback
 
 from tqdm.auto import tqdm
 
+from os import path
+
 @task('Making dataset')
 def make_dataset(params):
     if params.dataset in data.AMAZON_DATASETS:
@@ -56,11 +58,22 @@ def make_dataloaders(graph, params):
         job.done()
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Creating datasets (creating pytorch objects)').start()
+        job = Task('Getting dataset..').start()
 
-        dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test,
+        name = f"neighbour_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
+
+        if path.exists(name) and not params.dontloadfromdisk:
+            logger.info(f"Loading dataset '{name}' from disk...")
+            dataset = PrecomputedDataset.load_from_disk()
+        else:
+            logger.info(f"Creating dataset '{name}', this may take a bit...")
+            dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test,
                                     batch_size=params.batch_size, noshuffle=params.noshuffle, num_workers=params.num_loader_workers)
+            if not params.dontsave:
+                dataset.save_to_disk()
+                logger.info(f"Saved dataset '{name}' to disk!")
 
+        # get dataloaders
         train_data, val_data, test_data = dataset.get_loaders()
 
         job.done()
@@ -163,6 +176,8 @@ def parse_params():
     parser_train.add_argument('--nologger', action='store_true')
     parser_train.add_argument('--notest', action='store_true')
     parser_train.add_argument('--noshuffle', action='store_true')
+    parser_train.add_argument('--dontloadfromdisk', action='store_true')
+    parser_train.add_argument('--dontsave', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
 
     model_subparser = parser_train.add_subparsers(dest='model')
