@@ -1,10 +1,11 @@
 import torch
 from torch import nn
-from torch_geometric.nn import HeteroConv, SAGEConv
+from torch_geometric.nn import HeteroConv, SAGEConv, GCNConv, GATConv, GATv2Conv, SGConv
 
 from ctgraph.models.recommendation.module import RecommendationModule
 
-class MH(RecommendationModule):
+
+class CTGR(RecommendationModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_vocab_num = self.graph['u'].code.shape[0]
@@ -18,31 +19,49 @@ class MH(RecommendationModule):
 
         self.convs = nn.Sequential()
 
+        if self.params.convolution == 'SAGE':
+            convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size)
+        elif self.params.convolution == 'GCN':
+            convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size)
+        elif self.params.convolution == 'GAT':
+            convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size,
+                                          heads=self.params.heads)
+        elif self.params.convolution == 'GATv2':
+            convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size,
+                                            heads=self.params.heads)
+        elif self.params.convolution == 'SG':
+            # SGConv does all the convolutions at once (parameter K)
+            convolution = lambda: SGConv(self.params.embedding_size, self.params.embedding_size,
+                                         K=self.params.conv_layers)
+        else:
+            raise NotImplementedError()
+
         # current_size = input_size
         current_size = 0
-        for i in range(self.params.conv_layers):
+        for i in range(self.params.conv_layers if self.params.convolution != 'SG' else 1):
             self.convs.add_module(f"sage_layer_{i}", HeteroConv({
-                ('u', 'b', 'i'): SAGEConv(self.params.embedding_size, self.params.embedding_size),
-                ('i', 'rev_b', 'u'): SAGEConv(self.params.embedding_size, self.params.embedding_size),
+                ('u', 'b', 'i'): convolution(),
+                ('i', 'rev_b', 'u'): convolution(),
             }))
 
         # for the dot product at the end between the complete customer embedding and a candidate article
-        self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * (self.params.conv_layers+1))
+        self.transform = nn.Linear(self.params.embedding_size,
+                                   self.params.embedding_size * (self.params.conv_layers + 1))
 
-        if self.params.activation is None:
+        if self.params.activation is 'none':
             self.activation = lambda x: x
         else:
             self.activation = eval(f"torch.{self.params.activation}")
 
         self.dropout = nn.Dropout(self.params.dropout)
 
-
-
     @staticmethod
     def add_args(parser):
         parser.add_argument('--embedding_size', type=int, default=50)
         parser.add_argument('--conv_layers', type=int, default=4)
-        parser.add_argument('--activation', type=str, default=None)
+        parser.add_argument('--activation', type=str, default='relu')
+        parser.add_argument('--convolution', type=str, default='GCN')
+        parser.add_argument('--heads', type=int, default=1)
         parser.add_argument('--dropout', type=float, default=0.25)
 
     def predict_all_nodes(self, predict_u):
@@ -69,6 +88,8 @@ class MH(RecommendationModule):
             x_dict = {key: self.activation(x) for key, x in x_dict.items()}
 
             layered_embeddings_u.append(x_dict['u'])
+
+        # Note: For SGConv this is not really a layered embedding but just the output embedding
         layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
 
         # Grab the embeddings of the users and items who we will predict for
