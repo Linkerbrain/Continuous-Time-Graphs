@@ -6,6 +6,9 @@ import pickle
 from ctgraph import logger
 
 class RecentSampler():
+    """
+    RecentSampler samples the most recent m-order neighbourhood of an user efficiently
+    """
     def __init__(self, ordered_trans, ordered_trans_t, n, m):
         """
         ordered_trans is edge_index [[u, u, u, u], [i, i, i, i]]

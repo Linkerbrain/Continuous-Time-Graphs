@@ -6,6 +6,9 @@ from ctgraph.graphs import make_subset, sample_neighbourhood, add_random_eval_ed
 
 
 class PeriodicDataset(Dataset):
+    """
+    Deprecated
+    """
     # noinspection PyTypeChecker
     def __init__(self, graph, params):
         self.chunk_size = params.chunk_size

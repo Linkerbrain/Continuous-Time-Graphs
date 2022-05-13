@@ -13,7 +13,10 @@ from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
 
 from ctgraph import logger
 
-class SubsetDataset(Dataset):
+class SubsetLoader():
+    """
+    Subset Loader is a base module which allows the indexes of a subset to be converted to a Data object
+    """
     @staticmethod
     def add_args(parser):
         pass
@@ -39,8 +42,8 @@ class SubsetDataset(Dataset):
     # noinspection PyTypeChecker
     def create_subgraph(self, x_idx, y_idx):
         """
-        Makes graph with the x_idx index transactions,
-        and target with the y_idx index transactions
+        Makes pytorch graph data
+        with the x_idx index transactions and the y_idx index transactions
         """
         # sample transactions ('u', 'b', 'i')
         subgraph = self._make_subset_graph(x_idx)

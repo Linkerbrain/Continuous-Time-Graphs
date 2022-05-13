@@ -1,12 +1,10 @@
 import argparse
 import logging
 import random
-from typing import Sized, Iterable
 
 import numpy as np
 import torch
 from pytorch_lightning.loggers import NeptuneLogger
-from torch.utils.data import Dataset
 
 import ctgraph.datasets.periodic_dataset
 from ctgraph import data, models, Task, task
@@ -16,34 +14,12 @@ import pytorch_lightning as pl
 from ctgraph import logger
 from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
 
-from ctgraph.datasets.neighbour_dataset import NeighbourDataset
+from ctgraph.datasets.precomputed_dataset import PrecomputedDataset
+from ctgraph.datasets.most_recent_neighbour_loader import MostRecentNeighbourLoader
 
 from ctgraph.cool_traceback import cool_traceback
 
 from tqdm.auto import tqdm
-
-
-class PrecomputedDataset(Dataset, Iterable, Sized):
-    def __init__(self, batches, shuffle=True, n_batches=None):
-        self.batches = []
-        for batch in tqdm(batches, total=n_batches):
-            # add extra information
-            add_oui_and_oiu(batch)
-
-            # convert to pytorch
-            batch = numpy_to_torch(batch)
-
-            self.batches.append(batch)
-        self.shuffle = shuffle
-
-    def __len__(self):
-        return len(self.batches)
-
-    def __iter__(self):
-        if self.shuffle:
-            random.shuffle(self.batches)
-        return iter(self.batches)
-
 
 @task('Making dataset')
 def make_dataset(params):
@@ -58,38 +34,32 @@ def make_dataset(params):
     else:
         raise NotImplementedError()
 
+    logger.info(f"There are {graph['u'].code.shape[0]} users")
+    logger.info(f"There are {graph['i'].code.shape[0]} items")
+    logger.info(f"There are {graph['u', 'b', 'i'].code.shape[0]} transactions")
+
     return graph
 
 
 @task('Making data loaders')
 def make_dataloaders(graph, params):
     if params.sampler == 'periodic':
-        temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
-
-        # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Precomputing training set').start()
-        train_data = PrecomputedDataset(temporal_ds.train_data(), shuffle=not params.noshuffle,
-                                        n_batches=temporal_ds.train_data_len())
-        job.done()
-
-        job = Task('Precomputing validation and testing sets').start()
-        val_data = PrecomputedDataset(temporal_ds.val_data(), shuffle=not params.noshuffle)
-        test_data = PrecomputedDataset(temporal_ds.test_data(), shuffle=not params.noshuffle)
-        job.done()
+        # temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
+        raise NotImplementedError("periodic sampling is deprecated.")
 
     elif params.sampler == 'neighbour':
-        job = Task('Sampling neighbour dataset').start()
-        neighbour_ds = NeighbourDataset(graph, params)
+        job = Task('Sampling neighbour data...').start()
+        neighbours = MostRecentNeighbourLoader(graph, params)
         job.done()
 
         # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Creating neighbour training set').start()
-        train_data = neighbour_ds.make_train_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
-        job.done()
+        job = Task('Creating datasets (creating pytorch objects)').start()
 
-        job = Task('Precomputing validation and testing sets').start()
-        val_data = neighbour_ds.make_val_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
-        test_data = neighbour_ds.make_test_dataloader(batch_size=params.batch_size, shuffle=not params.noshuffle)
+        dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test,
+                                    batch_size=params.batch_size, noshuffle=params.noshuffle, num_workers=params.num_loader_workers)
+
+        train_data, val_data, test_data = dataset.get_loaders()
+
         job.done()
     else:
         raise NotImplementedError()
@@ -114,22 +84,8 @@ def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dat
     return model
 
 
-def main(params):
-    # Set all the seeds
-    random.seed(params.seed)
-    np.random.seed(params.seed)
-    torch.manual_seed(params.seed)
-
-    graph = make_dataset(params)
-
-    logger.info(f"There are {graph['u'].code.shape[0]} users")
-    logger.info(f"There are {graph['i'].code.shape[0]} items")
-    logger.info(f"There are {graph['u', 'b', 'i'].code.shape[0]} transactions")
-
-    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, params)
-
-    model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
-
+@task('Making logger')
+def make_logger(model, params):
     if not params.nologger:
         # Api key and proj name in env. NEPTUNE_API_TOKEN and NEPTUNE_PROJECT
         if params.load_checkpoint is None:
@@ -151,38 +107,13 @@ def main(params):
         if params.load_checkpoint is not None:
             raise NotImplementedError("Need to use logger (neptune) for checkpoints")
 
-    # training
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
-
-    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
-                        precision=int(params.precision) if params.precision.isdigit() else params.precision,
-                        accelerator=params.accelerator,
-                        devices=params.devices,
-                        log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
-                        callbacks=[checkpoint_callback],
-                        num_sanity_val_steps=2 if not params.novalidate else 0,
-                        strategy='ddp_sharded' if params.devices > 1 else None)
-
-    if not params.notrain:
-        task = Task('Training model').start()
-        trainer.fit(model)
-        task.done()
-
-    if not params.novalidate:
-        task = Task('Validating model').start()
-        trainer.validate(model)
-        task.done()
-
-    if not params.notest:
-        task = Task('Testing model').start()
-        trainer.test(model, test_dataloader_gen(model.current_epoch))
-        task.done()
-
-    # For interactive sessions/debugging
-    return locals()
+    return neptune
 
 
 def subparse_model(subparser, name, module):
+    """
+    Adds the parameters of the chosen model to the parser
+    """
     parser_module = subparser.add_parser(name)
     ctgraph.models.recommendation.sgat_module.RecommendationModule.add_base_args(parser_module)
     module.add_args(parser_module)
@@ -190,13 +121,15 @@ def subparse_model(subparser, name, module):
     gat_sampler_subparser = parser_module.add_subparsers(dest='sampler')
 
     parser_simple = gat_sampler_subparser.add_parser('neighbour')
-    NeighbourDataset.add_args(parser_simple)
+    MostRecentNeighbourLoader.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     ctgraph.datasets.periodic_dataset.PeriodicDataset.add_args(parser_periodic)
 
-
-if __name__ == "__main__":
+def parse_params():
+    """
+    Parse parameters
+    """
     parser = argparse.ArgumentParser(description="Seasonal Graph Attention")
     parser.add_argument('--logging_level', type=str, default='INFO')
     parser.add_argument('--dataset', type=str, default='beauty', help='dataset name',
@@ -215,6 +148,7 @@ if __name__ == "__main__":
     parser_train.add_argument('--batch_size', type=int, default=16)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
     parser_train.add_argument('--val_epochs', type=int, default=10)
+    parser_train.add_argument('--num_loader_workers', type=int, default=1)
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
@@ -238,8 +172,64 @@ if __name__ == "__main__":
     # Now parse the actual params
     params = parser.parse_args()
 
+    return params
+
+
+def main(params):
+    # Set all the seeds
+    random.seed(params.seed)
+    np.random.seed(params.seed)
+    torch.manual_seed(params.seed)
+
+    # parse entire dataset
+    graph = make_dataset(params)
+
+    # sample and make loaders
+    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, params)
+
+    # initiate model
+    model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
+
+    # initiate (Neptune) loader
+    neptune = make_logger(params)
+
+    # make trainer
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
+
+    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
+                        precision=int(params.precision) if params.precision.isdigit() else params.precision,
+                        accelerator=params.accelerator,
+                        devices=params.devices,
+                        log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
+                        callbacks=[checkpoint_callback],
+                        num_sanity_val_steps=2 if not params.novalidate else 0,
+                        strategy='ddp_sharded' if params.devices > 1 else None)
+
+    # train
+    if not params.notrain:
+        task = Task('Training model').start()
+        trainer.fit(model)
+        task.done()
+
+    # validate
+    if not params.novalidate:
+        task = Task('Validating model').start()
+        trainer.validate(model)
+        task.done()
+
+    # test
+    if not params.notest:
+        task = Task('Testing model').start()
+        trainer.test(model, test_dataloader_gen(model.current_epoch))
+        task.done()
+
+    # For interactive sessions/debugging
+    return locals()
+
+if __name__ == "__main__":
+    # parse parameters
+    params = parse_params()
     logger.info(params)
 
-    cool_traceback(main, params)
-
-    # main(params)
+    # start model
+    cool_traceback(main, params) # main(params)

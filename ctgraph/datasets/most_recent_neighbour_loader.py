@@ -1,12 +1,17 @@
 import pandas as pd
 
-from ctgraph.datasets.subset_dataset import SubsetDataset
+from ctgraph.datasets.subset_loader import SubsetLoader
 from ctgraph.datasets.recent_sampler import RecentSampler
 
 from torch_geometric.loader import DataLoader
 from ctgraph import logger
 
-class NeighbourDataset(SubsetDataset):
+class MostRecentNeighbourLoader(SubsetLoader):
+    """
+    MostRecentNeighbourLoader samples and loads the most recent m-hop neighbourhood of each user
+     uses the RecentSampler to sample the most recent transactions of each user
+     uses the SubsetLoader to convert to data objects
+    """
     @staticmethod
     def add_args(parser):
         parser.add_argument('--n_max_trans', type=int, default=20)
@@ -15,12 +20,6 @@ class NeighbourDataset(SubsetDataset):
         parser.add_argument('--num_users', type=int, default=100)
 
     def __init__(self, graph, params, *args, **kwargs):
-        """
-        Neighbour dataset
-
-        inherits from SubsetDataset, which allows the function self.create_batch
-        to be used to transform indexes to graphs
-        """
         # Initiate subset dataset which sorts the dataset (self.ordered_trans)
         super().__init__(graph, params, *args, **kwargs)
 
@@ -58,20 +57,17 @@ class NeighbourDataset(SubsetDataset):
     Generators:
     """
 
-    def make_train_dataloader(self, batch_size=8, shuffle=True):
-        # create batches
-        self.train_data = []
-
-        # iterate over sampled indices
+    def yield_train(self):
         for x_idx, y_idx in self.train_idx:
-            # create datapoint
-            user_graph_data = self.create_subgraph(x_idx, y_idx)
+            yield self.create_subgraph(x_idx, y_idx)
 
-            self.train_data.append(user_graph_data)
+    def yield_val(self):
+        for x_idx, y_idx in self.val_idx:
+            yield self.create_subgraph(x_idx, y_idx)
 
-        self.train_loader = DataLoader(self.train_data, batch_size=batch_size, shuffle=shuffle) #, num_workers=12)
-
-        return self.train_loader
+    def yield_test(self):
+        for x_idx, y_idx in self.test_idx:
+            yield self.create_subgraph(x_idx, y_idx)
 
     def make_val_dataloader(self, batch_size=8, shuffle=True):
         # create batches
