@@ -2,6 +2,7 @@ import itertools
 
 import numpy as np
 
+from tqdm.auto import tqdm
 
 def mean_average_precision(y_true, y_pred, k=12):
     """
@@ -58,7 +59,7 @@ def compute_eval_metrics(all_ranks, users):
     recall5, recall10, recall20, dcg5, dcg10, dcg20 = [], [], [], [], [], []
     recall5_tmp, recall10_tmp, recall20_tmp, dcg5_tmp, dcg10_tmp, dcg20_tmp = [], [], [], [], [], []
     last_u = users[0]
-    for u, rank in itertools.chain(zip(users, all_ranks), [(None, None)]):
+    for u, rank in tqdm(itertools.chain(zip(users, all_ranks), [(None, None)]), total=len(users)+1):
         if u != last_u:
             recall5.append(sum(recall5_tmp)/len(recall5_tmp))
             recall10.append(sum(recall10_tmp)/len(recall10_tmp))

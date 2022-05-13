@@ -5,7 +5,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch import nn
 
-from ctgraph import evaluation
+from ctgraph import evaluation, logger
 
 
 def cmp_loss(pred, label):
@@ -43,6 +43,7 @@ class RecommendationModule(pl.LightningModule):
         parser.add_argument('--no_MAP_neighbour', action='store_true')
         parser.add_argument('--train_style', type=str, default='binary',
                             choices=['binary', 'dgsr_softmax', 'eval'])
+        parser.add_argument('--val_extra_n_vals', type=int, default=5)
 
     @staticmethod
     def add_args(parser):
@@ -217,6 +218,10 @@ class RecommendationModule(pl.LightningModule):
             if not self.params.no_MAP_neighbour:
                 MAP_neighbourhood = self.neighbour_MAP(batch)
                 self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u))
+
+        if self.current_epoch != 0 and self.current_epoch % (self.params.val_epochs * self.params.val_extra_n_vals) == 0:
+            # Do a test_step but with the validation data, so the test set remains untouched
+            self.test_step(batch, batch_idx, namespace=namespace)
 
         return loss
 

@@ -81,7 +81,7 @@ class MostRecentNeighbourLoader(SubsetLoader):
             self.val_data.append(user_graph_data)
 
         # it is strongly recommended to turn off shuffling for val/test dataloaders
-        self.val_loader = DataLoader(self.val_data, batch_size=batch_size, shuffle=False) #, num_workers=12)
+        self.val_loader = DataLoader(self.val_data, batch_size=batch_size, shuffle=False, num_workers=0) #, num_workers=12)
 
         return self.val_loader
 
@@ -97,7 +97,7 @@ class MostRecentNeighbourLoader(SubsetLoader):
             self.test_data.append(user_graph_data)
 
         # it is strongly recommended to turn off shuffling for val/test dataloaders
-        self.test_loader = DataLoader(self.test_data, batch_size=batch_size, shuffle=False) #, num_workers=12)
+        self.test_loader = DataLoader(self.test_data, batch_size=batch_size, shuffle=False, num_workers=0) #, num_workers=12)
 
         return self.test_loader
 
