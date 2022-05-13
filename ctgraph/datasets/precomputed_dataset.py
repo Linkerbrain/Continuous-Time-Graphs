@@ -35,7 +35,7 @@ class PrecomputedDataset(Dataset):
     def _make_dataloader(self, yielder, shuffle):
         data_list = []
 
-        for data in yielder:
+        for data in yielder():
             # Possible data processings could happen here
             data_list.append(data)
         

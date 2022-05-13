@@ -193,7 +193,7 @@ def main(params):
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
 
     # initiate (Neptune) loader
-    neptune = make_logger(params)
+    neptune = make_logger(model, params)
 
     # make trainer
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
