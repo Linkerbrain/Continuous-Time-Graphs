@@ -237,15 +237,6 @@ class RecommendationModule(pl.LightningModule):
             'i': map_predict_i_codes.cpu().numpy(),
             'p': predictions.cpu().numpy()})
 
-        # # get targets
-        # supervised_predict_u = batch['u', 's', 'i'].edge_index[0]
-        # supervised_predict_i_codes = batch['i'].code[batch['u', 's', 'i'].edge_index[1]]
-
-        # target_df = pd.DataFrame({
-        #     'u': supervised_predict_u[batch['u', 's', 'i'].label == 1],
-        #     'i': supervised_predict_i_codes[batch['u', 's', 'i'].label == 1],
-        # })
-
         target_df = pd.DataFrame({
             'u': map_predict_u[batch['eval'].label == 1].cpu().numpy(),
             'i': map_predict_i_codes[batch['eval'].label == 1].cpu().numpy(),

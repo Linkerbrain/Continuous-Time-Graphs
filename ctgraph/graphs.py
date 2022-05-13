@@ -246,3 +246,11 @@ def add_oui_and_oiu(graph):
     
     graph[('u', 'b', 'i')].oui = oui
     graph[('u', 'b', 'i')].oiu = oiu
+
+
+def to_homogenous(hetero_graph):
+    # Leave ubi[0], set ubi[1] = ubi[1] + len(u)
+    # Set i = len(u) + i (cat u with i)
+    # put in n
+    # Dont do reverse edges
+    raise NotImplementedError()

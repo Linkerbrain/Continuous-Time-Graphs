@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch_geometric.nn import HeteroConv, SAGEConv, GCNConv, GATConv, GATv2Conv, SGConv
 
+from ctgraph import graphs
 from ctgraph.models.recommendation.module import RecommendationModule
 
 
@@ -22,6 +23,7 @@ class CTGR(RecommendationModule):
         if self.params.convolution == 'SAGE':
             convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size)
         elif self.params.convolution == 'GCN':
+            assert self.params.homogenous
             convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size)
         elif self.params.convolution == 'GAT':
             convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size,
@@ -30,6 +32,7 @@ class CTGR(RecommendationModule):
             convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size,
                                             heads=self.params.heads)
         elif self.params.convolution == 'SG':
+            assert self.params.homogenous
             # SGConv does all the convolutions at once (parameter K)
             convolution = lambda: SGConv(self.params.embedding_size, self.params.embedding_size,
                                          K=self.params.conv_layers)
@@ -39,10 +42,16 @@ class CTGR(RecommendationModule):
         # current_size = input_size
         current_size = 0
         for i in range(self.params.conv_layers if self.params.convolution != 'SG' else 1):
-            self.convs.add_module(f"sage_layer_{i}", HeteroConv({
-                ('u', 'b', 'i'): convolution(),
-                ('i', 'rev_b', 'u'): convolution(),
-            }))
+            if not self.params.homogenous:
+                self.convs.add_module(f"sage_layer_{i}", HeteroConv({
+                    ('u', 'b', 'i'): convolution(),
+                    ('i', 'rev_b', 'u'): convolution(),
+                }))
+            else:
+                self.convs.add_module(f"sage_layer_{i}", HeteroConv({
+                    ('a', 'b', 'a'): convolution(),
+                    # ('i', 'rev_b', 'u'): convolution(),
+                }))
 
         # for the dot product at the end between the complete customer embedding and a candidate article
         self.transform = nn.Linear(self.params.embedding_size,
@@ -60,24 +69,36 @@ class CTGR(RecommendationModule):
         parser.add_argument('--embedding_size', type=int, default=50)
         parser.add_argument('--conv_layers', type=int, default=4)
         parser.add_argument('--activation', type=str, default='relu')
-        parser.add_argument('--convolution', type=str, default='GCN')
+        parser.add_argument('--convolution', type=str, default='SAGE')
         parser.add_argument('--heads', type=int, default=1)
+        parser.add_argument('--homogenous', action='store_true')
         parser.add_argument('--dropout', type=float, default=0.25)
 
     def predict_all_nodes(self, predict_u):
         raise NotImplementedError()
 
     def forward(self, graph, predict_u, predict_i, predict_i_ptr):
-        # TODO: Add node features
-        x_dict = {
-            'u': self.user_embedding(graph['u'].code),
-            'i': self.item_embedding(graph['i'].code)
-        }
 
-        edge_index_dict = {
-            ('u', 'b', 'i'): graph['u', 'b', 'i'].edge_index,
-            ('i', 'rev_b', 'u'): graph['u', 'b', 'i'].edge_index.flip(dims=(0,))
-        }
+
+        if not self.params.homogenous:
+            # TODO: Add node features
+            x_dict = {
+                'u': self.user_embedding(graph['u'].code),
+                'i': self.item_embedding(graph['i'].code)
+            }
+            edge_index_dict = {
+                ('u', 'b', 'i'): graph['u', 'b', 'i'].edge_index,
+                ('i', 'rev_b', 'u'): graph['u', 'b', 'i'].edge_index.flip(dims=(0,))
+            }
+        else:
+            homo_graph = graphs.to_homogenous(graph)
+            x_dict = {
+                'a': torch.cat((self.user_embedding(graph['u'].code), self.item_embedding(graph['i'].code)))
+            }
+            edge_index_dict = {
+                ('a', 'b', 'a'): homo_graph['a', 'b', 'a'].edge_index,
+            }
+
 
         # TODO: edge_attr_dict with positional embeddings and such for GAT
 
