@@ -17,10 +17,13 @@ from ctgraph import logger
 from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
 
 from ctgraph.datasets.neighbour_dataset import NeighbourDataset
+from ctgraph.datasets.periodic_dataset import PeriodicDataset
 
 from ctgraph.cool_traceback import cool_traceback
 
 from tqdm.auto import tqdm
+
+from ctgraph.models.recommendation.module import RecommendationModule
 
 
 class PrecomputedDataset(Dataset, Iterable, Sized):
@@ -105,8 +108,8 @@ def make_dataloaders(graph, params):
 def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen):
     if params.model == 'DGSR':
         model = ctgraph.models.recommendation.dgsr.DGSR(graph, params, train_dataloader_gen, val_dataloader_gen)
-    elif params.model == 'MH':
-        model = ctgraph.models.recommendation.mh.MH(graph, params, train_dataloader_gen, val_dataloader_gen)
+    elif params.model == 'CTGR':
+        model = ctgraph.models.recommendation.ctgr.CTGR(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'DUMMY':
         model = ctgraph.models.recommendation.dummy.Dummy(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
@@ -184,7 +187,7 @@ def main(params):
 
 def subparse_model(subparser, name, module):
     parser_module = subparser.add_parser(name)
-    ctgraph.models.recommendation.sgat_module.RecommendationModule.add_base_args(parser_module)
+    RecommendationModule.add_base_args(parser_module)
     module.add_args(parser_module)
 
     gat_sampler_subparser = parser_module.add_subparsers(dest='sampler')
@@ -193,7 +196,7 @@ def subparse_model(subparser, name, module):
     NeighbourDataset.add_args(parser_simple)
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
-    ctgraph.datasets.periodic_dataset.PeriodicDataset.add_args(parser_periodic)
+    PeriodicDataset.add_args(parser_periodic)
 
 
 if __name__ == "__main__":
@@ -209,7 +212,6 @@ if __name__ == "__main__":
     parser_submit.add_argument('--save', type=str)
 
     parser_train = task_subparser.add_parser('train')
-    # parser_train.add_argument('--model', type=str, default='DGSR', choices={'DGSR', "GAT"})
     parser_train.add_argument('--days', type=int, default=None, help='subset of the data to train and test with')
     parser_train.add_argument('--epochs', type=int, default=1000)
     parser_train.add_argument('--batch_size', type=int, default=16)
@@ -232,7 +234,7 @@ if __name__ == "__main__":
     model_subparser = parser_train.add_subparsers(dest='model')
 
     subparse_model(model_subparser, 'DGSR', ctgraph.models.recommendation.dgsr.DGSR)
-    subparse_model(model_subparser, 'MH', ctgraph.models.recommendation.mh.MH)
+    subparse_model(model_subparser, 'CTGR', ctgraph.models.recommendation.ctgr.CTGR)
     subparse_model(model_subparser, 'DUMMY', ctgraph.models.recommendation.dummy.Dummy)
 
     # Now parse the actual params
