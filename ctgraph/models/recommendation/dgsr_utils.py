@@ -38,28 +38,6 @@ def pass_messages(messages, adjacency, pVui):
     # TODO: also scale by edge weight ?
 
     return output
-def pass_messages_no_possitional(messages, adjacency):
-    """
-    add messages together based on adjacency matrix
-
-    Parameters:
-        messages: tensor (i, h)
-        adjacency: sparse tensor (u, i)
-    """
-    # parse adjacency matrix
-    user_per_trans, item_per_trans = adjacency._indices()
-    alpha = adjacency._values().unsqueeze(-1)
-
-    # prepare output
-    output = torch.zeros((adjacency.shape[0], messages.shape[1]), dtype=float)
-
-    # add messages
-    output.index_add_(0, user_per_trans, messages[item_per_trans] * alpha)
-
-    # add embeddings
-    output.index_add_(0, user_per_trans, alpha)
-
-    return output
 
 def relative_order(oui, by_who, n=10):
     """
@@ -77,7 +55,7 @@ def relative_order(oui, by_who, n=10):
 
     return rui
 
-def get_last(by_who, what, code):
+def get_last(device, by_who, what, code):
 
     # compute amount of transactions of each user
     neighbourhood_sizes = torch.bincount(by_who)
@@ -89,5 +67,5 @@ def get_last(by_who, what, code):
     last_indices = torch.index_select(what, 0, cum_ind)
 
     # get item id's from graph
-    last_ids = torch.index_select(torch.Tensor(code), 0, last_indices)
+    last_ids = torch.index_select(torch.Tensor(code).to(device), 0, last_indices)
     return last_ids
