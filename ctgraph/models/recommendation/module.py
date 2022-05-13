@@ -5,7 +5,7 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch import nn
 
-from sgat import evaluation
+from ctgraph import evaluation
 
 
 def cmp_loss(pred, label):
@@ -14,9 +14,9 @@ def cmp_loss(pred, label):
     return torch.mean(negatives[:, None] - positives[None, :])
 
 
-class SgatModule(pl.LightningModule):
+class RecommendationModule(pl.LightningModule):
     def __init__(self, graph, params, train_dataloader_gen, val_dataloader_gen):
-        super(SgatModule, self).__init__()
+        super(RecommendationModule, self).__init__()
         self.graph = graph
         self.params = params
         self.train_dataloader_gen = train_dataloader_gen

@@ -1,10 +1,10 @@
 import pandas as pd
 
-from sgat.datasets.subset_dataset import SubsetDataset
-from sgat.datasets.recent_sampler import RecentSampler
+from ctgraph.datasets.subset_dataset import SubsetDataset
+from ctgraph.datasets.recent_sampler import RecentSampler
 
 from torch_geometric.loader import DataLoader
-from sgat import logger
+from ctgraph import logger
 
 class NeighbourDataset(SubsetDataset):
     @staticmethod

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pickle
 
-from sgat import logger
+from ctgraph import logger
 
 class RecentSampler():
     def __init__(self, ordered_trans, ordered_trans_t, n, m):
