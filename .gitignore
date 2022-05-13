@@ -9,3 +9,4 @@ hm
 .neptune
 *.egg-info
 checkpoints
+precomputed_data

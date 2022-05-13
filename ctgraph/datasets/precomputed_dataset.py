@@ -12,11 +12,14 @@ class PrecomputedDataset(Dataset):
     """
     PrecomputedDataset computes the graphs and provides dataloaders and save/load options
     """
-    def __init__(self, train_yielder, val_yielder, test_yielder, batch_size, noshuffle, num_workers):
+    def __init__(self, train_yielder, val_yielder, test_yielder, graph, batch_size, noshuffle, num_workers):
         # save yielders
         self.train_yielder = train_yielder
         self.val_yielder = val_yielder
         self.test_yielder = test_yielder
+
+        # save graph
+        self.graph = graph
 
         # save settings
         self.batch_size = batch_size
@@ -54,8 +57,8 @@ class PrecomputedDataset(Dataset):
 
         return torch.load(location)
 
-    def save_to_disk(self, data_dir="./precomputed_data/"):
-        location = path.join(data_dir, 'test.torch')
+    def save_to_disk(self, name, data_dir="./precomputed_data/"):
+        location = path.join(data_dir, name)
         if not path.exists(data_dir):
             os.mkdir(data_dir)
 

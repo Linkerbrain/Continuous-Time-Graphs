@@ -26,6 +26,21 @@ from tqdm.auto import tqdm
 
 from os import path
 
+@task('Loading dataset')
+def load_dataset(name, params):
+    logger.info(f"Loading dataset '{name}' from disk...")
+    dataset = PrecomputedDataset.load_from_disk(name)
+
+    # get dataloaders
+    train_data, val_data, test_data = dataset.get_loaders()
+
+    train_dataloader_gen = lambda _epoch: train_data
+    val_dataloader_gen = lambda _epoch: val_data
+    test_dataloader_gen = lambda _epoch: test_data
+
+    return dataset.graph, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
+
+
 @task('Making dataset')
 def make_dataset(params):
     if params.dataset in data.AMAZON_DATASETS:
@@ -47,31 +62,26 @@ def make_dataset(params):
 
 
 @task('Making data loaders')
-def make_dataloaders(graph, params):
+def make_dataloaders(graph, name, params):
     if params.sampler == 'periodic':
         # temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
         raise NotImplementedError("periodic sampling is deprecated.")
 
     elif params.sampler == 'neighbour':
+        # PrecomputedDataset converts the arrays in the graphs to torch
+
+        logger.info(f"Creating dataset '{name}', this may take a bit...")
+
         job = Task('Sampling neighbour data...').start()
         neighbours = MostRecentNeighbourLoader(graph, params)
         job.done()
 
-        # PrecomputedDataset converts the arrays in the graphs to torch
-        job = Task('Getting dataset..').start()
-
-        name = f"neighbour_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
-
-        if path.exists(name) and not params.dontloadfromdisk:
-            logger.info(f"Loading dataset '{name}' from disk...")
-            dataset = PrecomputedDataset.load_from_disk()
-        else:
-            logger.info(f"Creating dataset '{name}', this may take a bit...")
-            dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test,
-                                    batch_size=params.batch_size, noshuffle=params.noshuffle, num_workers=params.num_loader_workers)
-            if not params.dontsave:
-                dataset.save_to_disk()
-                logger.info(f"Saved dataset '{name}' to disk!")
+        job = Task('Creating dataset..').start()
+        dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test, graph,
+                                batch_size=params.batch_size, noshuffle=params.noshuffle, num_workers=params.num_loader_workers)
+        if not params.dontsave:
+            dataset.save_to_disk(name)
+            logger.info(f"Saved dataset '{name}' to disk!")
 
         # get dataloaders
         train_data, val_data, test_data = dataset.get_loaders()
@@ -198,11 +208,19 @@ def main(params):
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
 
-    # parse entire dataset
-    graph = make_dataset(params)
+    # experiment name of data
+    data_name = f"{params.dataset}_{params.sampler}_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
 
-    # sample and make loaders
-    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, params)
+    # load from disk
+    if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:
+        graph, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = load_dataset(data_name, params)
+    # or compute new data
+    else:
+        # parse entire dataset
+        graph = make_dataset(params)
+
+        # sample and make loaders
+        train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, data_name, params)
 
     # initiate model
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
