@@ -117,7 +117,8 @@ class SgatModule(pl.LightningModule):
         # This is not the number of users but the number of interactions used for supervision
         batch_size = len(predict_u)
 
-        self.log(f'{namespace}/loss', loss, batch_size=batch_size)
+        self.log(f'{namespace}/loss', loss, batch_size=batch_size, on_step=True)
+        self.log(f'{namespace}/loss_epoch', loss, batch_size=batch_size, on_epoch=True)
 
         self.log(f'{namespace}/n_customers', float(batch['u'].code.shape[0]), batch_size=batch_size)
         self.log(f'{namespace}/n_articles', float(batch['i'].code.shape[0]), batch_size=batch_size)
