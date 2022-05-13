@@ -13,8 +13,8 @@ class PrecomputedDataset(Dataset):
     def __init__(self, train_yielder, val_yielder, test_yielder, batch_size, noshuffle, num_workers):
         # save yielders
         self.train_yielder = train_yielder
-        self.val_yielder = train_yielder
-        self.test_yielder = train_yielder
+        self.val_yielder = val_yielder
+        self.test_yielder = test_yielder
 
         # save settings
         self.batch_size = batch_size

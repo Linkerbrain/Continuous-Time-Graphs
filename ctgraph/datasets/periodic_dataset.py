@@ -56,9 +56,6 @@ class PeriodicDataset(Dataset):
         supervision_graph = make_subset(self.graph,
                                         filter_transactions=np.bitwise_or.reduce(chunks[self.embedding_chunks:]))
 
-
-
-
         # noinspection PyUnreachableCode
         if True:  # TODO: Add as option to remove or not cold starts
             # Remove cold starts
