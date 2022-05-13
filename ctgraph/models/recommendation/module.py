@@ -78,7 +78,7 @@ class RecommendationModule(pl.LightningModule):
             """
             Softmax over all items
             """
-            predict_u = batch['target'].u_index # + batch['u'].ptr[:-1]
+            predict_u = batch['target'].u_index  # + batch['u'].ptr[:-1]
             predict_i_code = batch['target'].i_code
 
             # make prediction
@@ -131,7 +131,7 @@ class RecommendationModule(pl.LightningModule):
         self.log(f'{namespace}/n_targets', float(batch_size), batch_size=batch_size)
 
         self.log(f'{namespace}/time', time.time(), batch_size=batch_size)
-        
+
         self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size)
         self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size)
 
@@ -162,6 +162,43 @@ class RecommendationModule(pl.LightningModule):
         MAP = evaluation.mean_average_precision(y_true, y_pred, k=self.params.K)
 
         return MAP
+
+    def random_metrics(self, batch, namespace):
+        map_predict_u = batch['eval'].u_index
+        map_predict_i_codes = batch['eval'].i_code
+
+        # make predictions
+        predictions = self.forward(batch, map_predict_u, map_predict_i_codes, predict_i_ptr=False)
+
+        # get top k predictions (could be optimized)
+        pred_df = pd.DataFrame({
+            'u': map_predict_u.cpu().numpy(),
+            'i': map_predict_i_codes.cpu().numpy(),
+            'p': predictions.cpu().numpy()})
+
+        target_df = pd.DataFrame({
+            'u': map_predict_u[batch['eval'].label == 1].cpu().numpy(),
+            'i': map_predict_i_codes[batch['eval'].label == 1].cpu().numpy(),
+        })
+
+        all_ranks = []
+        for u, ip in pred_df.groupby("u"):
+            ranking = ip.sort_values('p', ascending=False).reset_index()
+            purchases = target_df.loc[target_df['u'] == u, 'i']
+            ranks = ranking['i'].loc[ranking['i'].isin(purchases)].index
+            all_ranks += list(ranks.values)
+
+        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks, torch.unique(
+            map_predict_u).cpu().numpy())
+
+        batch_size = len(map_predict_u)
+
+        self.log(f'{namespace}/recall5', recall5, batch_size=batch_size)
+        self.log(f'{namespace}/recall10', recall10, batch_size=batch_size)
+        self.log(f'{namespace}/recall20', recall20, batch_size=batch_size)
+        self.log(f'{namespace}/dcg5', dcg5, batch_size=batch_size)
+        self.log(f'{namespace}/dcg10', dcg10, batch_size=batch_size)
+        self.log(f'{namespace}/dcg20', dcg20, batch_size=batch_size)
 
     def neighbour_MAP(self, batch):
         # TODO: Check
@@ -198,7 +235,7 @@ class RecommendationModule(pl.LightningModule):
         MAP = evaluation.mean_average_precision(y_true, y_pred, k=12)
         return MAP
 
-    def validation_step(self, batch, batch_idx, namespace='val'):
+    def validation_step(self, batch, batch_idx, namespace='val', extra=False):
 
         # Just run a normal training_step, which logs the loss and everything it normally does
         # but doesn't do any training since we are in eval mode right now and the funciton itself
@@ -219,52 +256,17 @@ class RecommendationModule(pl.LightningModule):
                 MAP_neighbourhood = self.neighbour_MAP(batch)
                 self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u))
 
-        if self.current_epoch != 0 and self.current_epoch % (self.params.val_epochs * self.params.val_extra_n_vals) == 0:
+        if extra or self.current_epoch != 0 and self.current_epoch % (
+                self.params.val_epochs * self.params.val_extra_n_vals) == 0:
             # Do a test_step but with the validation data, so the test set remains untouched
-            self.test_step(batch, batch_idx, namespace=namespace)
+            self.random_metrics(batch, namespace)
 
         return loss
 
     def test_step(self, batch, batch_idx, namespace='test'):
 
         # Do standard validation as well to compute the MAP scores
-        loss = self.validation_step(batch, batch_idx, namespace=namespace)
-
-        map_predict_u = batch['eval'].u_index
-        map_predict_i_codes = batch['eval'].i_code
-
-        # make predictions
-        predictions = self.forward(batch, map_predict_u, map_predict_i_codes, predict_i_ptr=False)
-
-        # get top k predictions (could be optimized)
-        pred_df = pd.DataFrame({
-            'u': map_predict_u.cpu().numpy(),
-            'i': map_predict_i_codes.cpu().numpy(),
-            'p': predictions.cpu().numpy()})
-
-        target_df = pd.DataFrame({
-            'u': map_predict_u[batch['eval'].label == 1].cpu().numpy(),
-            'i': map_predict_i_codes[batch['eval'].label == 1].cpu().numpy(),
-        })
-
-        all_ranks = []
-        for u, ip in pred_df.groupby("u"):
-            ranking = ip.sort_values('p', ascending=False).reset_index()
-            purchases = target_df.loc[target_df['u'] == u, 'i']
-            ranks = ranking['i'].loc[ranking['i'].isin(purchases)].index
-            all_ranks += list(ranks.values)
-
-        recall5, recall10, recall20, dcg5, dcg10, dcg20 = evaluation.compute_eval_metrics(all_ranks, torch.unique(
-            map_predict_u).cpu().numpy())
-
-        batch_size = len(map_predict_u)
-
-        self.log(f'{namespace}/recall5', recall5, batch_size=batch_size)
-        self.log(f'{namespace}/recall10', recall10, batch_size=batch_size)
-        self.log(f'{namespace}/recall20', recall20, batch_size=batch_size)
-        self.log(f'{namespace}/dcg5', dcg5, batch_size=batch_size)
-        self.log(f'{namespace}/dcg10', dcg10, batch_size=batch_size)
-        self.log(f'{namespace}/dcg20', dcg20, batch_size=batch_size)
+        loss = self.validation_step(batch, batch_idx, namespace=namespace, extra=True)
 
         return loss
 
