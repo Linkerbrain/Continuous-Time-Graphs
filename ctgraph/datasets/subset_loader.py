@@ -9,7 +9,7 @@ from torch_geometric.data import HeteroData
 
 from ctgraph.graphs import add_random_eval_edges
 
-from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
+from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu, get_last
 
 from ctgraph import logger
 
@@ -57,6 +57,9 @@ class SubsetLoader():
 
         # add oui and oiu to ('u', 'b', 'i')
         add_oui_and_oiu(subgraph)
+
+        #add last items and users to ('u', 'b', 'i')
+        get_last(subgraph)
 
         # convert arrays to torch tensors
         subgraph_data = numpy_to_torch(subgraph)

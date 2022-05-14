@@ -33,7 +33,7 @@ def numpy_to_torch(data):
 
         for attribute, value in data[k].items():
             # choose datatype
-            if attribute in ['edge_index', 'oui', 'oiu']:
+            if attribute in ['edge_index', 'oui', 'oiu', 'last_item', 'last_user']:
                 dtype = torch.long
             elif type(value) is int:
                 dtype= torch.long
@@ -232,20 +232,58 @@ def add_oui_and_oiu(graph):
     # prepare arrays
     oui = np.zeros_like(edges_t)
     oiu = np.zeros_like(edges_t)
-    
+
     # sort by time
     trans_order = np.argsort(edges_t)
-    
+
     # oui = user's xth transaction, so the cumcount of that users occurence
     sorted_users = edges[0, :][trans_order]
     oui[trans_order] = cumcount(sorted_users) + 1
-    
+
     # oiu = item's xth transaction, so the cumcount of that items occurence
     sorted_items = edges[1, :][trans_order]
     oiu[trans_order] = cumcount(sorted_items) + 1
-    
+
     graph[('u', 'b', 'i')].oui = oui
     graph[('u', 'b', 'i')].oiu = oiu
+
+
+def get_last(graph):
+    edges = graph[('u', 'b', 'i')].edge_index
+    edges_t = graph[('u', 'b', 'i')].t
+
+    # order edges on time t
+    trans_order = np.argsort(edges_t)
+
+    # sorted users and items on time
+    sorted_users = edges[0, :][trans_order]
+    sorted_items = edges[1, :][trans_order]
+
+    # get last index of elements by reversing index of unique elements
+    unique_users_indexes = sorted_items[sorted_users.shape[0] - 1 - np.unique(sorted_users[::-1], return_index=True)[1]]
+    unique_items_indexes = sorted_users[sorted_items.shape[0] - 1 - np.unique(sorted_items[::-1], return_index=True)[1]]
+
+    # make array with unique users and last item and vice versa
+
+    # graph['last'].u_to_i_code = last_user_ids
+    #
+    # graph['last'].i_to_u_code = last_item_ids
+
+    graph['last_i'].u_code = graph['u'].code[unique_items_indexes]
+    graph['last_i'].i_code = graph['i'].code
+    graph['last_u'].u_code = graph['u'].code
+    graph['last_u'].i_code = graph['i'].code[unique_users_indexes]
+
+    assert check_graph(graph)
+
+    # assert graph['u'].code[-1] == last_user_ids[0,-1]
+    # assert graph['i'].code[-1] == last_item_ids[0,-1]
+
+    # assert last_user_ids.shape == (2, graph['u'].code.shape[0])
+    # assert last_item_ids.shape == (2, graph['i'].code.shape[0])
+    #
+    # assert last_user_ids[-1][-1] == graph['i'].code[sorted_items[np.where(sorted_users==last_user_ids.shape[1]-1)[0][-1]]]
+    # assert last_item_ids[-1][-1] == graph['u'].code[sorted_users[np.where(sorted_items==last_item_ids.shape[1]-1)[0][-1]]]
 
 
 def to_homogenous(hetero_graph):

@@ -12,7 +12,7 @@ from ctgraph import data, models, Task, task
 import pytorch_lightning as pl
 
 from ctgraph import logger
-from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu
+from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu, get_last
 
 from ctgraph.datasets.precomputed_dataset import PrecomputedDataset
 from ctgraph.datasets.most_recent_neighbour_loader import MostRecentNeighbourLoader
