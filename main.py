@@ -170,7 +170,8 @@ def parse_params():
     parser_train = task_subparser.add_parser('train')
     parser_train.add_argument('--days', type=int, default=None, help='subset of the data to train and test with')
     parser_train.add_argument('--epochs', type=int, default=1000)
-    parser_train.add_argument('--batch_size', type=int, default=16)
+    parser_train.add_argument('--batch_size', type=int, default=4)
+    parser_train.add_argument('--batch_accum', type=int, default=32)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
     parser_train.add_argument('--val_epochs', type=int, default=1)
     parser_train.add_argument('--num_loader_workers', type=int, default=0)
@@ -232,6 +233,7 @@ def main(params):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
 
     trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
+                        accumulate_grad_batches=params.batch_accum,
                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
                         accelerator=params.accelerator,
                         devices=params.devices,

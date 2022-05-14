@@ -2,11 +2,15 @@ import torch
 from torch.utils.data import Dataset
 from typing import Sized, Iterable
 
-import tqdm
+from tqdm.auto import tqdm
 import os
 from os import path
 
 from torch_geometric.loader import DataLoader
+
+from ctgraph import logger
+
+import sys
 
 class PrecomputedDataset(Dataset):
     """
@@ -33,14 +37,17 @@ class PrecomputedDataset(Dataset):
         # shuffle train dataset by default, except if told not to
         shuffle_train = not self.noshuffle
 
-        self.train_data, self.train_loader = self._make_dataloader(self.train_yielder, shuffle=shuffle_train)
-        self.val_data, self.val_loader = self._make_dataloader(self.val_yielder, shuffle=False)
-        self.test_data, self.test_loader = self._make_dataloader(self.test_yielder, shuffle=False)
+        logger.info("Creating train data..")
+        self.train_data, self.train_loader = self._make_dataloader(self.train_yielder, shuffle=shuffle_train, name='train')
+        logger.info("Creating validation data..")
+        self.val_data, self.val_loader = self._make_dataloader(self.val_yielder, shuffle=False, name='val')
+        logger.info("Creating test data..")
+        self.test_data, self.test_loader = self._make_dataloader(self.test_yielder, shuffle=False, name='test')
 
-    def _make_dataloader(self, yielder, shuffle):
+    def _make_dataloader(self, yielder, shuffle, name=''):
         data_list = []
 
-        for data in yielder():
+        for i, data in tqdm(enumerate(yielder())):
             # Possible data processings could happen here
             data_list.append(data)
         
