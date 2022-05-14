@@ -220,6 +220,9 @@ def main(params):
     # experiment name of data
     data_name = f"{params.dataset}_{params.sampler}_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
 
+    if params.newsampler:
+        data_name += "_newsampled"
+
     # load from disk
     if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:
         graph, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = load_dataset(data_name, params)

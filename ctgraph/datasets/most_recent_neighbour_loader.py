@@ -2,6 +2,7 @@ import pandas as pd
 
 from ctgraph.datasets.subset_loader import SubsetLoader
 from ctgraph.datasets.recent_sampler import RecentSampler
+from ctgraph.datasets.paper_sampler import PaperSampler
 
 from torch_geometric.loader import DataLoader
 from ctgraph import logger
@@ -17,8 +18,9 @@ class MostRecentNeighbourLoader(SubsetLoader):
     @staticmethod
     def add_args(parser):
         parser.add_argument('--n_max_trans', type=int, default=20)
-        parser.add_argument('--m_order', type=int, default=2)
+        parser.add_argument('--m_order', type=float, default=2)
         parser.add_argument('--num_users', type=int, default=None)
+        parser.add_argument('--newsampler', action='store_true')
 
     def __init__(self, graph, params, *args, **kwargs):
         # Initiate subset dataset which sorts the dataset (self.ordered_trans)
@@ -29,7 +31,11 @@ class MostRecentNeighbourLoader(SubsetLoader):
         else:
             num_users = params.num_users
 
-        self.rs = RecentSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
+        
+        if params.newsampler:
+            self.rs = PaperSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
+        else:
+            self.rs = RecentSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
 
         self._prepare_idxs(num_users)
 
@@ -53,9 +59,12 @@ class MostRecentNeighbourLoader(SubsetLoader):
                 fails +=1
                 continue
 
-            self.train_idx.append((sample['x_train'], sample['y_train']))
-            self.val_idx.append((sample['x_val'], sample['y_val']))
-            self.test_idx.append((sample['x_test'], sample['y_test']))
+            for x, y in zip(sample['x_train'], sample['y_train']):
+                self.train_idx.append((x, y))
+            for x, y in zip(sample['x_val'], sample['y_val']):
+                self.val_idx.append((x, y))
+            for x, y in zip(sample['x_test'], sample['y_test']):
+                self.test_idx.append((x, y))
 
         logger.info(f'[NeighbourDataset] Skipped {fails}/{num_users} users due to them not having enough transactions.')
 

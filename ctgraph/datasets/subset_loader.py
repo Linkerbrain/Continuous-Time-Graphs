@@ -22,7 +22,6 @@ class SubsetLoader():
         pass
 
     def __init__(self, graph, params):
-        logger.info("Entire Graph:" +str(graph))
         self.graph = graph
         self.transactions = graph[('u', 'b', 'i')].edge_index
 

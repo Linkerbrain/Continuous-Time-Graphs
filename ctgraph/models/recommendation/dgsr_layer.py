@@ -8,7 +8,8 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
     def __init__(self,
                  user_num, item_num,
                  hidden_size,
-                 user_max, item_max
+                 user_max, item_max,
+                 shortterm
                 ):
         super().__init__()
         """ init """
@@ -20,6 +21,8 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         self.hidden_size = hidden_size
         self.sqrt_d = np.sqrt(self.hidden_size)
+
+        self.do_shortterm = shortterm
 
         """ layers """
         self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
@@ -132,8 +135,10 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         # longterm
         hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
 
-        # shortterm (has some gpu issues WIP)
-        hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph)
-        # hSu, hSi = None, None
+        # shortterm
+        if self.do_shortterm:
+            hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph)
+        else:
+            hSu, hSi = None, None
 
         return hLu, hSu, hLi, hSi
