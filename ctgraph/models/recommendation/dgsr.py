@@ -46,8 +46,8 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs
 # m=2
 python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 25 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 16 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 10 --m_order 2 --num_user 10000
 
-# hun parameters
-python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 25 --batch_size 1 DGSR --train_style dgsr_softmax --embedding_size 50 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 20 --m_order 2 --num_user 10000
+# beast mode
+python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 25 --batch_size 5 --batch_accum 10 DGSR --train_style dgsr_softmax --embedding_size 50 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 20 --m_order 1 --num_user 1000
 
 """
 
