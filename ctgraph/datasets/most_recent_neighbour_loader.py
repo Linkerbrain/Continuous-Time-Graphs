@@ -26,6 +26,8 @@ class MostRecentNeighbourLoader(SubsetLoader):
 
         if params.num_users is None:
             num_users = graph['u'].code.shape[0]
+        else:
+            num_users = params.num_users
 
         self.rs = RecentSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
 
