@@ -172,7 +172,12 @@ class DGSR(RecommendationModule):
 
         return scores
 
-    def forward(self, batch, predict_u, predict_i, predict_i_ptr=True):
+    def forward(self, batch, predict_u, predict_i=None, predict_i_ptr=None):
+        if predict_i is None:
+            return self.predict_all_nodes(batch, predict_u)
+
+        assert predict_i is None or predict_i_ptr is not None
+
         # propagate graph
         hu_list, hi_list = self.forward_graph(batch)
 
