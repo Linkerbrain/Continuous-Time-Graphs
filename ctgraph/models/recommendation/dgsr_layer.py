@@ -85,7 +85,6 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         return longterm_hu, longterm_hi
 
-    def shortterm(self, u_embedded, i_embedded, edge_index, graph):
     def shortterm(self, u_embedded, i_embedded, edge_index, graph, last_u, last_i):
         # --- short term ---
         user_per_trans, item_per_trans = edge_index.indices()
@@ -94,14 +93,12 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         item_messages = self.w1(i_embedded) # (i, h)
 
         # Get last item
-        last_item = get_last(user_messages.device, user_per_trans, item_per_trans, graph['i'].code).to(torch.int)
         # last_item = get_last(user_messages.device, user_per_trans, item_per_trans, graph['i'].code).to(torch.int)
         last_item = last_u[1]
         last_item_embedding = self.last_item_embedding(last_item)
         last_item = self.w3(last_item_embedding)
 
         # Get last user from items
-        last_user = get_last(item_messages.device, item_per_trans, user_per_trans, graph['u'].code).to(torch.int)
         # last_user = get_last(item_messages.device, item_per_trans, user_per_trans, graph['u'].code).to(torch.int)
         last_user = last_i[1]
         last_user_embedding = self.last_user_embedding(last_user)
@@ -135,7 +132,6 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         return shortterm_hu, shortterm_hi
 
 
-    def forward(self, u_emb, i_emb, edge_index, rui, riu, graph):
     def forward(self, u_emb, i_emb, edge_index, rui, riu, graph, last_u, last_i):
         # propagate information
         # longterm
