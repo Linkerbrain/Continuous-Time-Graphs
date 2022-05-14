@@ -7,6 +7,7 @@ import os
 from os import path
 
 from torch_geometric.loader import DataLoader
+from tqdm.auto import tqdm
 
 class PrecomputedDataset(Dataset):
     """
@@ -43,9 +44,9 @@ class PrecomputedDataset(Dataset):
     def _make_dataloader(self, yielder, shuffle):
         data_list = []
 
-        for i, data in enumerate(yielder()):
+        for i, data in tqdm(enumerate(yielder())):
             if self.neptune_logger is not None:
-                self.neptune_logger["loading/batch"].log(i)
+                self.neptune_logger.experiment["loading/batch"].log(i)
             # Possible data processings could happen here
             data_list.append(data)
         

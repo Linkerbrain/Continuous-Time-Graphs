@@ -71,7 +71,7 @@ class RecommendationModule(pl.LightningModule):
             labels = batch['u', 's', 'i'].label
 
             # backward
-            loss = self.loss_fn(predictions, labels)
+            loss = self.loss_fn(torch.sigmoid(predictions), labels)
 
             positives_mean = torch.mean(predictions[labels.bool()])
             negatives_mean = torch.mean(predictions[~labels.bool()])
@@ -103,7 +103,7 @@ class RecommendationModule(pl.LightningModule):
             labels = batch['eval'].label
 
             # backward
-            loss = self.loss_fn(predictions, labels)
+            loss = self.loss_fn(torch.sigmoid(predictions), labels)
 
             positives_mean = torch.mean(predictions[labels.bool()])
             negatives_mean = torch.mean(predictions[~labels.bool()])
@@ -113,8 +113,10 @@ class RecommendationModule(pl.LightningModule):
         # This is not the number of users but the number of interactions used for supervision
         batch_size = len(predict_u)
 
-        self.log(f'{namespace}/loss', loss, batch_size=batch_size, on_step=True)
-        self.log(f'{namespace}/loss_epoch', loss, batch_size=batch_size, on_epoch=True)
+        self.log(f'{namespace}/loss', loss, batch_size=batch_size, on_step=True, on_epoch=True)
+
+        self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size, on_step=True, on_epoch=True)
 
         self.log(f'{namespace}/n_customers', float(batch['u'].code.shape[0]), batch_size=batch_size)
         self.log(f'{namespace}/n_articles', float(batch['i'].code.shape[0]), batch_size=batch_size)
@@ -127,9 +129,6 @@ class RecommendationModule(pl.LightningModule):
         self.log(f'{namespace}/n_targets', float(batch_size), batch_size=batch_size)
 
         self.log(f'{namespace}/time', time.time(), batch_size=batch_size)
-
-        self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size)
-        self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size)
 
         return loss
 
@@ -189,12 +188,12 @@ class RecommendationModule(pl.LightningModule):
 
         batch_size = len(map_predict_u)
 
-        self.log(f'{namespace}/recall5', recall5, batch_size=batch_size)
-        self.log(f'{namespace}/recall10', recall10, batch_size=batch_size)
-        self.log(f'{namespace}/recall20', recall20, batch_size=batch_size)
-        self.log(f'{namespace}/dcg5', dcg5, batch_size=batch_size)
-        self.log(f'{namespace}/dcg10', dcg10, batch_size=batch_size)
-        self.log(f'{namespace}/dcg20', dcg20, batch_size=batch_size)
+        self.log(f'{namespace}/recall5', recall5, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/recall10', recall10, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/recall20', recall20, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/dcg5', dcg5, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/dcg10', dcg10, batch_size=batch_size, on_step=True, on_epoch=True)
+        self.log(f'{namespace}/dcg20', dcg20, batch_size=batch_size, on_step=True, on_epoch=True)
 
     def neighbour_MAP(self, batch):
         # TODO: Check
@@ -245,12 +244,12 @@ class RecommendationModule(pl.LightningModule):
             # COMPUTE MAP ON RANDOM EDGES
             if not self.params.no_MAP_random:
                 MAP_random = self.random_MAP(batch)
-                self.log(f'{namespace}/MAP_random', MAP_random, batch_size=len(supervised_predict_u))
+                self.log(f'{namespace}/MAP_random', MAP_random, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
 
             # COMPUTE MAP ON NEIGHBOURHOOD
             if not self.params.no_MAP_neighbour:
                 MAP_neighbourhood = self.neighbour_MAP(batch)
-                self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u))
+                self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
 
         if extra or self.current_epoch != 0 and self.current_epoch % (
                 self.params.val_epochs * self.params.val_extra_n_vals) == 0:

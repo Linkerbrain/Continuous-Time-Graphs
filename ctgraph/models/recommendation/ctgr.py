@@ -121,8 +121,13 @@ class CTGR(RecommendationModule):
         else:
             embeddings_i = self.item_embedding.weight
 
-        # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
-        predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
-        # predictions = torch.einsum('ij, ij->i', layered_embeddings_u, self.transform(embeddings_i))
+        if predict_i is not None:
+            predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
+            # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
+            # predictions = torch.einsum('ij, ij->i', layered_embeddings_u, self.transform(embeddings_i))
+        else:
+            # Do every user for every item, resulting in a u x i matrix instead
+            predictions = layered_embeddings_u @ self.transform(embeddings_i).T
 
-        return torch.sigmoid(predictions)
+
+        return predictions

@@ -228,11 +228,11 @@ def main(params):
         graph = make_dataset(params)
 
         # sample and make loaders
-        train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, data_name, params)
+        train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, data_name, params,
+                                                                                         neptune_logger)
 
     # initiate model
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
-
 
     # make trainer
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
