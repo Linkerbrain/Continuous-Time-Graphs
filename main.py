@@ -26,6 +26,9 @@ from tqdm.auto import tqdm
 
 from os import path
 
+import neptune.new as neptune
+
+
 @task('Loading dataset')
 def load_dataset(name, params):
     logger.info(f"Loading dataset '{name}' from disk...")
@@ -62,7 +65,7 @@ def make_dataset(params):
 
 
 @task('Making data loaders')
-def make_dataloaders(graph, name, params):
+def make_dataloaders(graph, name, params, neptune_logger=None):
     if params.sampler == 'periodic':
         # temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
         raise NotImplementedError("periodic sampling is deprecated.")
@@ -78,7 +81,8 @@ def make_dataloaders(graph, name, params):
 
         job = Task('Creating dataset..').start()
         dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test, graph,
-                                batch_size=params.batch_size, noshuffle=params.noshuffle, num_workers=params.num_loader_workers)
+                                     batch_size=params.batch_size, noshuffle=params.noshuffle,
+                                     num_workers=params.num_loader_workers, neptune_logger=neptune_logger)
         if not params.dontsave:
             dataset.save_to_disk(name)
             logger.info(f"Saved dataset '{name}' to disk!")
@@ -111,20 +115,20 @@ def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dat
 
 
 @task('Making logger')
-def make_logger(model, params):
+def make_logger(params):
     if not params.nologger:
+        import neptune.new as neptune
         # Api key and proj name in env. NEPTUNE_API_TOKEN and NEPTUNE_PROJECT
         if params.load_checkpoint is None:
-            neptune = NeptuneLogger(
-                tags=["training", "graph_nn"],
-            )
-        else:
-            import neptune.new as neptune
-            run = neptune.init(run=params.load_checkpoint)
+            run = neptune.init(tags=["training", "graph_nn"])
             neptune = NeptuneLogger(run=run)
-            checkpoint_path = neptune.experiment["training/model/best_model_path"].fetch()
-            checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            raise NotImplementedError
+            # run = neptune.init(run=params.load_checkpoint)
+            # neptune = NeptuneLogger(run=run)
+            # checkpoint_path = neptune.experiment["training/model/best_model_path"].fetch()
+            # checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+            # model.load_state_dict(checkpoint['state_dict'])
         for k, v in vars(params).items():
             neptune.experiment[f'global/params/{k}'] = str(v)
         neptune.experiment[f'global/info'] = params.info
@@ -151,6 +155,7 @@ def subparse_model(subparser, name, module):
 
     parser_periodic = gat_sampler_subparser.add_parser('periodic')
     PeriodicDataset.add_args(parser_periodic)
+
 
 def parse_params():
     """
@@ -208,6 +213,9 @@ def main(params):
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
 
+    # initiate (Neptune) loader
+    neptune_logger = make_logger(params)
+
     # experiment name of data
     data_name = f"{params.dataset}_{params.sampler}_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
 
@@ -225,20 +233,19 @@ def main(params):
     # initiate model
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
 
-    # initiate (Neptune) loader
-    neptune = make_logger(model, params)
 
     # make trainer
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
 
-    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune,  # track_grad_norm=2,
-                        precision=int(params.precision) if params.precision.isdigit() else params.precision,
-                        accelerator=params.accelerator,
-                        devices=params.devices,
-                        log_every_n_steps=1, check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
-                        callbacks=[checkpoint_callback],
-                        num_sanity_val_steps=2 if not params.novalidate else 0,
-                        strategy='ddp_sharded' if params.devices > 1 else None)
+    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune_logger,  # track_grad_norm=2,
+                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
+                         accelerator=params.accelerator,
+                         devices=params.devices,
+                         log_every_n_steps=1,
+                         check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
+                         callbacks=[checkpoint_callback],
+                         num_sanity_val_steps=2 if not params.novalidate else 0,
+                         strategy='ddp_sharded' if params.devices > 1 else None)
 
     # train
     if not params.notrain:
@@ -261,10 +268,11 @@ def main(params):
     # For interactive sessions/debugging
     return locals()
 
+
 if __name__ == "__main__":
     # parse parameters
     params = parse_params()
     logger.info(params)
 
     # start model
-    cool_traceback(main, params) # main(params)
+    cool_traceback(main, params)  # main(params)

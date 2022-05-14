@@ -12,7 +12,7 @@ class PrecomputedDataset(Dataset):
     """
     PrecomputedDataset computes the graphs and provides dataloaders and save/load options
     """
-    def __init__(self, train_yielder, val_yielder, test_yielder, graph, batch_size, noshuffle, num_workers):
+    def __init__(self, train_yielder, val_yielder, test_yielder, graph, batch_size, noshuffle, num_workers, neptune_logger=None):
         # save yielders
         self.train_yielder = train_yielder
         self.val_yielder = val_yielder
@@ -26,8 +26,11 @@ class PrecomputedDataset(Dataset):
         self.noshuffle = noshuffle
         self.num_workers = num_workers
 
+        self.neptune_logger = neptune_logger
+
         # iniate loaders
         self._init_dataloaders()
+
 
     def _init_dataloaders(self):
         # shuffle train dataset by default, except if told not to
@@ -40,7 +43,9 @@ class PrecomputedDataset(Dataset):
     def _make_dataloader(self, yielder, shuffle):
         data_list = []
 
-        for data in yielder():
+        for i, data in enumerate(yielder()):
+            if self.neptune_logger is not None:
+                self.neptune_logger["loading/batch"].log(i)
             # Possible data processings could happen here
             data_list.append(data)
         

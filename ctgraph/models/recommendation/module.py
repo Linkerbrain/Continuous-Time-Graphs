@@ -56,6 +56,8 @@ class RecommendationModule(pl.LightningModule):
         return self.val_dataloader_gen(self.current_epoch)
 
     def training_step(self, batch, batch_idx, namespace='train'):
+        predict_i = None
+
         if self.params.train_style == 'binary':
             """
             Binary classification edge yes/no per defined u, i pair
@@ -73,34 +75,30 @@ class RecommendationModule(pl.LightningModule):
 
             positives_mean = torch.mean(predictions[labels.bool()])
             negatives_mean = torch.mean(predictions[~labels.bool()])
-
         elif self.params.train_style == 'dgsr_softmax':
             """
             Softmax over all items
             """
             predict_u = batch['target'].u_index  # + batch['u'].ptr[:-1]
-            predict_i_code = batch['target'].i_code
+            target_i_code = batch['target'].i_code
 
             # make prediction
-            predictions = self.predict_all_nodes(batch, predict_u)
+            predictions = self.forward(batch, predict_u)
             if len(predictions.shape) == 1:
                 predictions = predictions[None, :]
 
             # only real edges in target
-            loss = self.loss_fn(predictions, predict_i_code)
+            loss = self.loss_fn(predictions, target_i_code)
 
-            positives_mean = torch.mean(predictions[:, predict_i_code])
-            negatives_mean = (torch.sum(predictions) - positives_mean * len(predict_i_code)) / (
-                    predictions.shape[1] - len(predict_i_code))
-
-            # For the logging
-            predict_i = predict_i_code
+            positives_mean = torch.mean(predictions[:, target_i_code])
+            negatives_mean = (torch.sum(predictions) - positives_mean * len(target_i_code)) / (
+                    predictions.shape[1] - len(target_i_code))
         elif self.params.train_style == 'eval':
             predict_u = batch['eval'].u_index
-            predict_i_code = batch['eval'].i_code
+            target_i_code = batch['eval'].i_code
 
             # forward
-            predictions = self.forward(batch, predict_u, predict_i_code, predict_i_ptr=False)
+            predictions = self.forward(batch, predict_u, target_i_code, predict_i_ptr=False)
 
             labels = batch['eval'].label
 
@@ -109,9 +107,6 @@ class RecommendationModule(pl.LightningModule):
 
             positives_mean = torch.mean(predictions[labels.bool()])
             negatives_mean = torch.mean(predictions[~labels.bool()])
-
-            # For the logging
-            predict_i = predict_i_code
         else:
             raise NotImplementedError()
 
@@ -124,7 +119,8 @@ class RecommendationModule(pl.LightningModule):
         self.log(f'{namespace}/n_customers', float(batch['u'].code.shape[0]), batch_size=batch_size)
         self.log(f'{namespace}/n_articles', float(batch['i'].code.shape[0]), batch_size=batch_size)
 
-        self.log(f'{namespace}/n_target_articles', float(len(torch.unique(predict_i))), batch_size=batch_size)
+        if predict_i is not None:
+            self.log(f'{namespace}/n_target_articles', float(len(torch.unique(predict_i))), batch_size=batch_size)
         self.log(f'{namespace}/n_target_customers', float(len(torch.unique(predict_u))), batch_size=batch_size)
 
         self.log(f'{namespace}/n_transactions', float(len(batch['u', 'b', 'i'].edge_index[0])), batch_size=batch_size)

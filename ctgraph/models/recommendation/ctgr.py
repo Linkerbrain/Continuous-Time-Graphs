@@ -57,7 +57,7 @@ class CTGR(RecommendationModule):
         self.transform = nn.Linear(self.params.embedding_size,
                                    self.params.embedding_size * (self.params.conv_layers + 1))
 
-        if self.params.activation is 'none':
+        if self.params.activation == 'none':
             self.activation = lambda x: x
         else:
             self.activation = eval(f"torch.{self.params.activation}")
@@ -74,12 +74,8 @@ class CTGR(RecommendationModule):
         parser.add_argument('--homogenous', action='store_true')
         parser.add_argument('--dropout', type=float, default=0.25)
 
-    def predict_all_nodes(self, predict_u):
-        raise NotImplementedError()
-
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None
-
 
         if not self.params.homogenous:
             # TODO: Add node features
@@ -118,10 +114,12 @@ class CTGR(RecommendationModule):
         layered_embeddings_u = layered_embeddings_u[predict_u]
 
         # check if predict i are indices or codes
-        if predict_i_ptr:
+        if predict_i is not None and predict_i_ptr:
             embeddings_i = self.item_embedding(graph['i'].code[predict_i])
-        else:
+        elif predict_i is not None:
             embeddings_i = self.item_embedding(predict_i)
+        else:
+            embeddings_i = self.item_embedding.weight
 
         # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
         predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
