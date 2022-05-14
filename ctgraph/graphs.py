@@ -264,26 +264,12 @@ def get_last(graph):
     unique_items_indexes = sorted_users[sorted_items.shape[0] - 1 - np.unique(sorted_items[::-1], return_index=True)[1]]
 
     # make array with unique users and last item and vice versa
-
-    # graph['last'].u_to_i_code = last_user_ids
-    #
-    # graph['last'].i_to_u_code = last_item_ids
-
     graph['last_i'].u_code = graph['u'].code[unique_items_indexes]
     graph['last_i'].i_code = graph['i'].code
     graph['last_u'].u_code = graph['u'].code
     graph['last_u'].i_code = graph['i'].code[unique_users_indexes]
 
     assert check_graph(graph)
-
-    # assert graph['u'].code[-1] == last_user_ids[0,-1]
-    # assert graph['i'].code[-1] == last_item_ids[0,-1]
-
-    # assert last_user_ids.shape == (2, graph['u'].code.shape[0])
-    # assert last_item_ids.shape == (2, graph['i'].code.shape[0])
-    #
-    # assert last_user_ids[-1][-1] == graph['i'].code[sorted_items[np.where(sorted_users==last_user_ids.shape[1]-1)[0][-1]]]
-    # assert last_item_ids[-1][-1] == graph['u'].code[sorted_users[np.where(sorted_items==last_item_ids.shape[1]-1)[0][-1]]]
 
 
 def to_homogenous(hetero_graph):
