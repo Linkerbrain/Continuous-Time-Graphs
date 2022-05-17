@@ -179,7 +179,7 @@ def parse_params():
     parser_train.add_argument('--batch_accum', type=int, default=32)
     parser_train.add_argument('--accelerator', type=str, default='gpu')
     parser_train.add_argument('--val_epochs', type=int, default=1)
-    parser_train.add_argument('--num_loader_workers', type=int, default=0)
+    parser_train.add_argument('--num_loader_workers', type=int, default=1)
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
@@ -222,6 +222,8 @@ def main(params):
 
     if params.newsampler:
         data_name += "_newsampled"
+        if params.sample_all:
+            data_name += "_sampleall"
 
     # load from disk
     if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:

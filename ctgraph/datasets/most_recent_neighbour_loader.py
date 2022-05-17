@@ -18,9 +18,10 @@ class MostRecentNeighbourLoader(SubsetLoader):
     @staticmethod
     def add_args(parser):
         parser.add_argument('--n_max_trans', type=int, default=20)
-        parser.add_argument('--m_order', type=float, default=2)
+        parser.add_argument('--m_order', type=int, default=2)
         parser.add_argument('--num_users', type=int, default=None)
         parser.add_argument('--newsampler', action='store_true')
+        parser.add_argument('--sample_all', action='store_true')
 
     def __init__(self, graph, params, *args, **kwargs):
         # Initiate subset dataset which sorts the dataset (self.ordered_trans)
@@ -33,7 +34,7 @@ class MostRecentNeighbourLoader(SubsetLoader):
 
         
         if params.newsampler:
-            self.rs = PaperSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
+            self.rs = PaperSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order, sample_all=params.sample_all)
         else:
             self.rs = RecentSampler(self.ordered_trans, self.ordered_trans_t, n=params.n_max_trans, m=params.m_order)
 

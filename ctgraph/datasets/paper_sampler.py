@@ -38,7 +38,7 @@ class PaperSampler():
     """
     Samples like in the paper
     """
-    def __init__(self, ordered_trans, ordered_trans_t, n, m):
+    def __init__(self, ordered_trans, ordered_trans_t, n, m, sample_all):
         """
         ordered_trans is edge_index [[u, u, u, u], [i, i, i, i]]
         ordered_trans_t is corresponding time [t, t, t, t]
@@ -58,6 +58,8 @@ class PaperSampler():
         # TODO make parameter (?)
         self.min_trans_count = 3
         self.min_graph_size = 20 if self.m > 0 else 5
+
+        self.sample_all = sample_all
 
 
     def sample_neighbourhood(self, t, target_user):
@@ -111,11 +113,14 @@ class PaperSampler():
         x_val_trans = val_neighbourhood
 
         # training (others are used for training)
-        target_idx = user_trans[-3]
+        if self.sample_all:
+            target_idxs = user_trans[-3::-1]
+        else:
+            target_idxs = [user_trans[-3]]
 
         x_train_trans_list = []
         y_train_trans_list = []
-        for target_idx in user_trans[-3::-1]:
+        for target_idx in target_idxs:
             train_neighbourhood = self.sample_neighbourhood(self.ordered_trans_t[target_idx], target_u)
 
             if len(train_neighbourhood) < self.min_graph_size:
