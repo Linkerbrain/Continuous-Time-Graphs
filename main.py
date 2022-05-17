@@ -244,7 +244,7 @@ def main(params):
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
 
     trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune_logger,  # track_grad_norm=2,
-                        accumulate_grad_batches=params.batch_accum,
+                         accumulate_grad_batches=params.batch_accum,
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,
                          accelerator=params.accelerator,
                          devices=params.devices,
