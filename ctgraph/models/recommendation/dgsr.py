@@ -118,6 +118,14 @@ class DGSR(RecommendationModule):
         oui = batch[('u', 'b', 'i')].oui
         oiu = batch[('u', 'b', 'i')].oiu
 
+        last_user_user_code = batch[('last_u')].u_code
+        last_user_item_code = batch[('last_u')].i_code
+        last_item_user_code = batch[('last_i')].u_code
+        last_item_item_code = batch[('last_i')].i_code
+
+        last_user = (last_user_user_code, last_user_item_code)
+        last_item = (last_item_item_code, last_item_user_code)
+
         # embedding
         hu = self.user_embedding(u_code) # (u, h)
         hi = self.item_embedding(i_code) # (i, h)
@@ -135,7 +143,7 @@ class DGSR(RecommendationModule):
         hu_list = [hu]
         hi_list = [hi]
         for DGSR in self.DGSRLayers:
-            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph)
+            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph, last_user, last_item)
 
             # concatenate information
             if self.shortterm:
