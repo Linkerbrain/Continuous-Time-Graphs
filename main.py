@@ -81,10 +81,11 @@ def make_dataloaders(graph, name, params, neptune_logger=None):
 
         job = Task('Creating dataset..').start()
         dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test, graph,
+                                     name=name, partial_save=params.partial_save,
                                      batch_size=params.batch_size, noshuffle=params.noshuffle,
                                      num_workers=params.num_loader_workers, neptune_logger=neptune_logger)
         if not params.dontsave:
-            dataset.save_to_disk(name)
+            dataset.save_to_disk()
             logger.info(f"Saved dataset '{name}' to disk!")
 
         # get dataloaders
@@ -194,6 +195,7 @@ def parse_params():
     parser_train.add_argument('--noshuffle', action='store_true')
     parser_train.add_argument('--dontloadfromdisk', action='store_true')
     parser_train.add_argument('--dontsave', action='store_true')
+    parser_train.add_argument('--partial_save', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
 
     model_subparser = parser_train.add_subparsers(dest='model')
@@ -224,6 +226,9 @@ def main(params):
         data_name += "_newsampled"
         if params.sample_all:
             data_name += "_sampleall"
+
+    if params.partial_save:
+        data_name += "_partial_save"
 
     # load from disk
     if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:

@@ -47,7 +47,7 @@ class SubsetLoader():
         # sample transactions ('u', 'b', 'i')
         subgraph = self._make_subset_graph(x_idx)
 
-        # add target transactions ('u', 's', 'i')
+        # add target transactions 'target'
         self._add_target_from_vocab(subgraph, y_idx)
 
         # add eval transactions ['eval'].u_index, ['eval'].i_code
