@@ -33,7 +33,7 @@ def numpy_to_torch(data):
 
         for attribute, value in data[k].items():
             # choose datatype
-            if attribute in ['edge_index', 'oui', 'oiu', 'last_item', 'last_user']:
+            if attribute in ['edge_index', 'oui', 'oiu', 'last_i', 'last_u']:
                 dtype = torch.long
             elif type(value) is int:
                 dtype= torch.long
@@ -248,7 +248,7 @@ def add_oui_and_oiu(graph):
     graph[('u', 'b', 'i')].oiu = oiu
 
 
-def get_last(graph):
+def add_last(graph):
     edges = graph[('u', 'b', 'i')].edge_index
     edges_t = graph[('u', 'b', 'i')].t
 
