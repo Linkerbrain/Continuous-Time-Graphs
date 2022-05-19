@@ -93,6 +93,7 @@ class RecommendationModule(pl.LightningModule):
             positives_mean = torch.mean(predictions[:, target_i_code])
             negatives_mean = (torch.sum(predictions) - positives_mean * len(target_i_code)) / (
                     predictions.shape[1] - len(target_i_code))
+                    
         elif self.params.train_style == 'eval':
             predict_u = batch['eval'].u_index
             target_i_code = batch['eval'].i_code

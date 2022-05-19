@@ -5,13 +5,10 @@ import pandas as pd
 import numpy_indexed as npi
 
 from torch.utils.data import Dataset
-from torch_geometric.data import HeteroData
-
-from ctgraph.graphs import add_random_eval_edges
-
-from ctgraph.graphs import numpy_to_torch, add_oui_and_oiu, add_last
 
 from ctgraph import logger
+from ctgraph.graphs import add_random_eval_edges, numpy_to_torch, add_oui_and_oiu, add_last
+from ctgraph.datasets.ui_hetero_data import UIHeteroData
 
 class SubsetLoader():
     """
@@ -81,7 +78,7 @@ class SubsetLoader():
         subset_edges, subset_edges_t = self._remap_edges(customers, articles, subset_edges, subset_edges_t, remap_items=True)
 
         # build object
-        subdata = HeteroData()
+        subdata = UIHeteroData()
 
         subdata['u'].code = customers
         subdata['u'].num_nodes = len(customers)

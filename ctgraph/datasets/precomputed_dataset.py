@@ -108,6 +108,8 @@ class PrecomputedDataset(Dataset):
         return dataset
 
     def save_to_disk(self):
+        self.neptune_logger = None
+        
         location = path.join(self.data_dir, self.name)
         if not path.exists(self.data_dir):
             os.mkdir(self.data_dir)
