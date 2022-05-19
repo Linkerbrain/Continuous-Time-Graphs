@@ -1,3 +1,4 @@
+import copy
 import time
 import torch
 
@@ -232,6 +233,9 @@ class RecommendationModule(pl.LightningModule):
         return MAP
 
     def validation_step(self, batch, batch_idx, namespace='val', extra=False):
+        # This prevents some kind of synchronization issue when num_workers > 0
+        # See https://github.com/pytorch/pytorch/issues/973
+        batch = copy.deepcopy(batch)
 
         # Just run a normal training_step, which logs the loss and everything it normally does
         # but doesn't do any training since we are in eval mode right now and the funciton itself
