@@ -3,9 +3,9 @@ import copy
 import numpy as np
 import pandas as pd
 import torch
-from torch_geometric.data import HeteroData
 import numpy_indexed as npi
 
+from ctgraph.datasets.ui_hetero_data import UIHeteroData
 from ctgraph.np_utils import cumcount
 
 
@@ -21,7 +21,7 @@ def numpy_to_torch(data):
     Returns:
 
     """
-    graph = HeteroData()
+    graph = UIHeteroData()
 
     for k in data.node_types + data.edge_types:
         # When converting an edge index to a sparse matrix, and coalescing, its indices get sorted
@@ -103,7 +103,7 @@ def make_subset(data, filter_transactions=None, filter_customers=None, filter_ar
 
     """
     if not inplace:
-        subdata = HeteroData()
+        subdata = UIHeteroData()
     else:
         subdata = data
 
