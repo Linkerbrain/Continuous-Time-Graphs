@@ -47,7 +47,7 @@ class PrecomputedDataset(Dataset):
     PrecomputedDataset computes the graphs and provides dataloaders and save/load options
     """
 
-    def __init__(self, train_yielder, val_yielder, test_yielder, graph, batch_size, noshuffle, num_workers,
+    def __init__(self, train_yielder, val_yielder, test_yielder, graph,
                  partial_save, name, data_dir=DEFAULT_DATA_DIR, neptune_logger=None):
         self.name = name
         self.data_dir = data_dir
@@ -60,32 +60,28 @@ class PrecomputedDataset(Dataset):
         # save graph
         self.graph = graph
 
-        # save settings
-        self.batch_size = batch_size
-        self.noshuffle = noshuffle
-        self.num_workers = num_workers
 
         self.partial_save = partial_save
 
         self.neptune_logger = neptune_logger
 
         # iniate loaders
-        self._init_dataloaders()
+        self._init_datasets()
 
-    def _init_dataloaders(self):
+    def _init_datasets(self):
         # shuffle train dataset by default, except if told not to
         shuffle_train = not self.noshuffle
 
         logger.info("Creating train data..")
-        self.train_data, self.train_loader = self._make_dataloader(self.train_yielder, shuffle=shuffle_train,
-                                                                   part='train')
+        self.train_data = self._make_dataset(self.train_yielder,
+                                                                part='train')
         logger.info("Creating validation data..")
-        self.val_data, self.val_loader = self._make_dataloader(self.val_yielder, shuffle=False, part='val')
+        self.val_data = self._make_dataset(self.val_yielder, part='val')
         logger.info("Creating test data..")
-        self.test_data, self.test_loader = self._make_dataloader(self.test_yielder, shuffle=False, part='test')
+        self.test_data = self._make_dataset(self.test_yielder, part='test')
 
     # noinspection PyUnboundLocalVariable
-    def _make_dataloader(self, yielder, shuffle, part):
+    def _make_dataset(self, yielder, part):
         if not self.partial_save:
             data_list = []
         else:
@@ -99,13 +95,8 @@ class PrecomputedDataset(Dataset):
             else:
                 disk_dataset.putitem(data)
 
-        data_loader = DataLoader(data_list if not self.partial_save else disk_dataset, batch_size=self.batch_size,
-                                 shuffle=shuffle, num_workers=self.num_workers)
+        return data_list if not self.partial_save else disk_dataset
 
-        return data_list if not self.partial_save else disk_dataset, data_loader
-
-    def get_loaders(self):
-        return self.train_loader, self.val_loader, self.test_loader
 
     @staticmethod
     def load_from_disk(name, data_dir=DEFAULT_DATA_DIR):

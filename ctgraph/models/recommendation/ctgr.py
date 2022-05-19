@@ -4,6 +4,7 @@ from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroConv, SAGEConv, GCNConv, GATConv, GATv2Conv, SGConv, LGConv
 
 from ctgraph import graphs
+from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
 
 
@@ -67,7 +68,13 @@ class CTGR(RecommendationModule):
         else:
             # for the dot product at the end between the complete customer embedding and a candidate article
             self.transform = nn.Linear(self.params.embedding_size,
-                                   self.params.embedding_size * (self.params.conv_layers + 1))
+                                       self.params.embedding_size * (self.params.conv_layers + 1))
+
+        if self.params.edge_attr == 'positional':
+            self.positional_user_embedding = nn.Embedding(self.params.n_max_trans,
+                                                          self.params.embedding_size)  # user positional embedding
+            self.positional_item_embedding = nn.Embedding(self.params.n_max_trans,
+                                                          self.params.embedding_size)  # item positional embedding
 
         if self.params.activation == 'none':
             self.activation = lambda x: x
@@ -87,87 +94,19 @@ class CTGR(RecommendationModule):
         parser.add_argument('--dropout', type=float, default=0.25)
         parser.add_argument('--split_conv', action='store_true',
                             help='Manually simulate heterogenity for convolution operators that do not support it')
+        parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'temporal'])
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None
 
         if not self.params.homogenous and not self.params.split_conv:
-            # TODO: Add node features
-            x_dict = {
-                'u': self.user_embedding(graph['u'].code),
-                'i': self.item_embedding(graph['i'].code)
-            }
-            edge_index_dict = {
-                ('u', 'b', 'i'): graph['u', 'b', 'i'].edge_index,
-                ('i', 'rev_b', 'u'): graph['u', 'b', 'i'].edge_index.flip(dims=(0,))
-            }
-            # TODO: edge_attr_dict with positional embeddings and such for GAT
-
-            # TODO: Treat articles and users symmetrically: get layered embedding for both
-            layered_embeddings_u = [x_dict['u'][predict_u]]
-            for conv in self.convs:
-                x_dict = conv(x_dict, edge_index_dict)
-                x_dict = {key: self.activation(x) for key, x in x_dict.items()}
-
-                layered_embeddings_u.append(x_dict['u'][predict_u])
-
-            layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
-
-            # layered_embeddings_u = layered_embeddings_u[predict_u]
-
+            layered_embeddings_u = self.get_layered_embeddings(graph, predict_u)
         elif self.params.homogenous:
-            hetero_graph = HeteroData()
-
-            # to_homogeneous needs it in 'x'
-            hetero_graph['u'].x = self.user_embedding(graph['u'].code)
-            hetero_graph['i'].x = self.item_embedding(graph['i'].code)
-            hetero_graph['u', 'b', 'i'].edge_index = graph['u', 'b', 'i'].edge_index
-
-            homo_graph = hetero_graph.to_homogeneous('x')
-
-            # Ensure the users are first
-            assert homo_graph.node_type.sum() == len(graph['i'].code)
-            assert homo_graph.edge_type[0] == 0
-
-            x = homo_graph.x
-            edge_index = homo_graph.edge_index
-
-
-            # TODO: edge_attr_dict with positional embeddings and such for GAT
-
-            # TODO: Treat articles and users symmetrically: get layered embedding for both
-            layered_embeddings_u = [x[predict_u]]
-            for conv in self.convs:
-                x = conv(x, edge_index)
-                x = self.activation(x)
-                layered_embeddings_u.append(x[predict_u])
-
-            # Grab the layered embeddings from the users to predict. Since the concatenation by to_homogenous puts
-            # them in the front we don't need to translate their indices
-            # Note: For SGConv this is not really a layered embedding but just the output and input embeddings
-            layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
-
+            layered_embeddings_u = self.get_layered_embeddings_homo(graph, predict_u)
         elif self.params.split_conv:
-            x_dict = {
-                'u': self.user_embedding(graph['u'].code),
-                'i': self.item_embedding(graph['i'].code)
-            }
-            edge_index = graph['u', 'b', 'i'].edge_index
-
-            n_users = graph['u'].code.shape[0]
-
-            layered_embeddings_u = [x_dict['u'][predict_u]]
-            for conv, conv2 in zip(self.convs, self.convs2):
-                x = torch.cat((x_dict['u'], x_dict['i']))
-                x_dict['u'] = conv(x, edge_index)[:n_users]
-                x_dict['i'] = conv2(x, edge_index)[n_users:]
-
-                x_dict = {key: self.activation(x) for key, x in x_dict.items()}
-
-                layered_embeddings_u.append(x_dict['u'][predict_u])
-
-            layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
-
+            layered_embeddings_u = self.get_layered_embeddings_split(graph, predict_u)
+        else:
+            raise NotImplementedError()
 
         # check if predict i are indices or codes
         if predict_i is not None and predict_i_ptr:
@@ -186,3 +125,91 @@ class CTGR(RecommendationModule):
             predictions = layered_embeddings_u @ self.transform(embeddings_i).T
 
         return predictions
+
+    def get_layered_embeddings_split(self, graph, predict_u):
+        x_dict = {
+            'u': self.user_embedding(graph['u'].code),
+            'i': self.item_embedding(graph['i'].code)
+        }
+        edge_index = graph['u', 'b', 'i'].edge_index
+        n_users = graph['u'].code.shape[0]
+        layered_embeddings_u = [x_dict['u'][predict_u]]
+        for i, conv, conv2 in zip(range(len(self.convs)), self.convs, self.convs2):
+            x = torch.cat((x_dict['u'], x_dict['i']))
+            x_dict['u'] = conv(x, edge_index)[:n_users]
+            x_dict['i'] = conv2(x, edge_index)[n_users:]
+
+            x_dict = {key: self.activation(x) for key, x in x_dict.items()}
+            if i != len(self.convs) - 1:
+                x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+            layered_embeddings_u.append(x_dict['u'][predict_u])
+        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+        return layered_embeddings_u
+
+    def get_layered_embeddings_homo(self, graph, predict_u):
+        hetero_graph = HeteroData()
+        # to_homogeneous needs it in 'x'
+        hetero_graph['u'].x = self.user_embedding(graph['u'].code)
+        hetero_graph['i'].x = self.item_embedding(graph['i'].code)
+        hetero_graph['u', 'b', 'i'].edge_index = graph['u', 'b', 'i'].edge_index
+        homo_graph = hetero_graph.to_homogeneous('x')
+        # Ensure the users are first
+        assert homo_graph.node_type.sum() == len(graph['i'].code)
+        assert homo_graph.edge_type[0] == 0
+        x = homo_graph.x
+        edge_index = homo_graph.edge_index
+        # TODO: edge_attr_dict with positional embeddings and such for GAT
+        # TODO: Treat articles and users symmetrically: get layered embedding for both
+        layered_embeddings_u = [x[predict_u]]
+        for i, conv in enumerate(self.convs):
+            x = conv(x, edge_index)
+            x = self.activation(x)
+            layered_embeddings_u.append(x[predict_u])
+            if i != len(self.convs) - 1:
+                x = self.dropout(x)
+        # Grab the layered embeddings from the users to predict. Since the concatenation by to_homogenous puts
+        # them in the front we don't need to translate their indices
+        # Note: For SGConv this is not really a layered embedding but just the output and input embeddings
+        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+        return layered_embeddings_u
+
+    def get_layered_embeddings(self, graph, predict_u):
+        # TODO: Add node features
+        x_dict = {
+            'u': self.user_embedding(graph['u'].code),
+            'i': self.item_embedding(graph['i'].code)
+        }
+        edge_index_dict = {
+            ('u', 'b', 'i'): graph['u', 'b', 'i'].edge_index,
+            ('i', 'rev_b', 'u'): graph['u', 'b', 'i'].edge_index.flip(dims=(0,))
+        }
+
+        if self.params.edge_attr == 'positional':
+            rui = relative_order(graph['u', 'b', 'i'].oui, graph['u', 'b', 'i'].edge_index[0],
+                                 n=self.params.n_max_trans)
+            riu = relative_order(graph['u', 'b', 'i'].oiu, graph['u', 'b', 'i'].edge_index[0],
+                                 n=self.params.n_max_trans)
+            # u b i points to items thus updates the item embeddings and should use riu
+            # i rev_b u it the other way around
+            edge_attr_dict = {
+                ('u', 'b', 'i'): self.positional_item_embedding(riu),
+                ('i', 'rev_b', 'u'): self.positional_user_embedding(rui)
+            }
+
+        # TODO: edge_attr_dict with positional embeddings and such for GAT
+        # TODO: Treat articles and users symmetrically: get layered embedding for both
+        layered_embeddings_u = [x_dict['u'][predict_u]]
+        for i, conv in enumerate(self.convs):
+            if self.params.edge_attr == 'positional' or self.params.edge_attr == 'temporal':
+                x_dict = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
+            else:
+                x_dict = conv(x_dict, edge_index_dict)
+            x_dict = {key: self.activation(x) for key, x in x_dict.items()}
+            if i != len(self.convs) - 1:
+                x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
+
+            layered_embeddings_u.append(x_dict['u'][predict_u])
+        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+        # layered_embeddings_u = layered_embeddings_u[predict_u]
+        return layered_embeddings_u

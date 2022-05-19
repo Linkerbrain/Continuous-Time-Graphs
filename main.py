@@ -5,6 +5,7 @@ import random
 import numpy as np
 import torch
 from pytorch_lightning.loggers import NeptuneLogger
+from torch_geometric.loader import DataLoader
 
 import ctgraph.datasets.periodic_dataset
 from ctgraph import data, models, Task, task
@@ -35,17 +36,13 @@ def load_dataset(name, params):
     dataset = PrecomputedDataset.load_from_disk(name)
 
     # get dataloaders
-    train_data, val_data, test_data = dataset.get_loaders()
+    train_data, val_data, test_data = dataset.train_data, dataset.val_data, dataset.test_data
 
-    train_dataloader_gen = lambda _epoch: train_data
-    val_dataloader_gen = lambda _epoch: val_data
-    test_dataloader_gen = lambda _epoch: test_data
-
-    return dataset.graph, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
+    return dataset.graph, train_data, val_data, test_data
 
 
 @task('Making dataset')
-def make_dataset(params):
+def make_graph(params):
     if params.dataset in data.AMAZON_DATASETS:
         if params.days is not None:
             logging.warning("Amazon datasets do not support subsetting with --days")
@@ -64,8 +61,23 @@ def make_dataset(params):
     return graph
 
 
+def make_dataloaders(train_data, val_data, test_data, params):
+    train_dataloader = DataLoader(train_data, batch_size=params.batch_size,
+                                  shuffle=not params.noshuffle, num_workers=params.num_loader_workers)
+    val_dataloader = DataLoader(val_data, batch_size=params.batch_size,
+                                shuffle=False, num_workers=params.num_loader_workers)
+    test_dataloader = DataLoader(test_data, batch_size=params.batch_size,
+                                 shuffle=False, num_workers=params.num_loader_workers)
+
+    train_dataloader_gen = lambda _epoch: train_dataloader
+    val_dataloader_gen = lambda _epoch: val_dataloader
+    test_dataloader_gen = lambda _epoch: test_dataloader
+
+    return train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
+
+
 @task('Making data loaders')
-def make_dataloaders(graph, name, params, neptune_logger=None):
+def make_datasets(graph, name, params, neptune_logger=None):
     if params.sampler == 'periodic':
         # temporal_ds = ctgraph.datasets.periodic_dataset.PeriodicDataset(graph, params)
         raise NotImplementedError("periodic sampling is deprecated.")
@@ -81,25 +93,21 @@ def make_dataloaders(graph, name, params, neptune_logger=None):
 
         job = Task('Creating dataset..').start()
         dataset = PrecomputedDataset(neighbours.yield_train, neighbours.yield_val, neighbours.yield_test, graph,
-                                     name=name, partial_save=params.partial_save,
-                                     batch_size=params.batch_size, noshuffle=params.noshuffle,
-                                     num_workers=params.num_loader_workers, neptune_logger=neptune_logger)
+                                     name=name, partial_save=params.partial_save, neptune_logger=neptune_logger)
+
         if not params.dontsave:
             dataset.save_to_disk()
             logger.info(f"Saved dataset '{name}' to disk!")
 
-        # get dataloaders
-        train_data, val_data, test_data = dataset.get_loaders()
-
         job.done()
+
+        # get dataloaders
+        train_data, val_data, test_data = dataset.train_data, dataset.val_data, dataset.test_data
+
     else:
         raise NotImplementedError()
 
-    train_dataloader_gen = lambda _epoch: train_data
-    val_dataloader_gen = lambda _epoch: val_data
-    test_dataloader_gen = lambda _epoch: test_data
-
-    return train_dataloader_gen, val_dataloader_gen, test_dataloader_gen
+    return train_data, val_data, test_data
 
 
 @task('Making model')
@@ -232,15 +240,19 @@ def main(params):
 
     # load from disk
     if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:
-        graph, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = load_dataset(data_name, params)
+
+        graph, train_data, val_data, test_data = load_dataset(data_name, params)
     # or compute new data
     else:
         # parse entire dataset
-        graph = make_dataset(params)
+        graph = make_graph(params)
 
         # sample and make loaders
-        train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(graph, data_name, params,
-                                                                                         neptune_logger)
+        train_data, val_data, test_data = make_datasets(graph, data_name, params,
+                                                        neptune_logger)
+
+    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(train_data, val_data, test_data,
+                                                                                     params)
 
     # initiate model
     model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
