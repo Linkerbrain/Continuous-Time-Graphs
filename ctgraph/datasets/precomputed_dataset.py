@@ -70,7 +70,6 @@ class PrecomputedDataset(Dataset):
 
     def _init_datasets(self):
         # shuffle train dataset by default, except if told not to
-        shuffle_train = not self.noshuffle
 
         logger.info("Creating train data..")
         self.train_data = self._make_dataset(self.train_yielder,
