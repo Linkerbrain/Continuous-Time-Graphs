@@ -10,3 +10,7 @@ hm
 *.egg-info
 checkpoints
 precomputed_data
+*.ipynb
+*.pickle
+*.pickle
+*.csv
