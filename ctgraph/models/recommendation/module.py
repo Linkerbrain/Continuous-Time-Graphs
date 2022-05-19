@@ -252,8 +252,9 @@ class RecommendationModule(pl.LightningModule):
                 MAP_neighbourhood = self.neighbour_MAP(batch)
                 self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
 
-        if extra or self.current_epoch != 0 and self.current_epoch % (
-                self.params.val_epochs * self.params.val_extra_n_vals) == 0:
+
+        # calculate dcg and recall
+        if extra or (self.current_epoch != 0 and (self.current_epoch+1) % (self.params.val_epochs * self.params.val_extra_n_vals) == 0):
             # Do a test_step but with the validation data, so the test set remains untouched
             self.random_metrics(batch, namespace)
 
