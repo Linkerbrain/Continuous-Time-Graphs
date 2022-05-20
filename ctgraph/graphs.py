@@ -226,7 +226,11 @@ def add_random_eval_edges(graph, num_items, true_u_index=None, true_i_code=None,
     graph['eval'].label = label
 
 def add_oui_and_oiu(graph):
+    # oiu is the order of u−i interaction, that is,
+    # the position of item i in all items that the u has interacted with
 
+    # oui refers to the order of u in all user nodes that
+    # have interacted with item i
     edges = graph[('u', 'b', 'i')].edge_index
     edges_t = graph[('u', 'b', 'i')].t
     # prepare arrays
@@ -235,6 +239,8 @@ def add_oui_and_oiu(graph):
 
     # sort by time
     trans_order = np.argsort(edges_t)
+
+    sorted_time = edges_t[:][trans_order]
 
     # oui = user's xth transaction, so the cumcount of that users occurence
     sorted_users = edges[0, :][trans_order]
@@ -248,6 +254,8 @@ def add_oui_and_oiu(graph):
     graph[('u', 'b', 'i')].oiu = oiu
 
 
+
+
 def add_last(graph):
     edges = graph[('u', 'b', 'i')].edge_index
     edges_t = graph[('u', 'b', 'i')].t
@@ -256,6 +264,7 @@ def add_last(graph):
     trans_order = np.argsort(edges_t)
 
     # sorted users and items on time
+    sorted_time = edges_t[:][trans_order]
     sorted_users = edges[0, :][trans_order]
     sorted_items = edges[1, :][trans_order]
 
@@ -264,17 +273,10 @@ def add_last(graph):
     unique_items_indexes = sorted_users[sorted_items.shape[0] - 1 - np.unique(sorted_items[::-1], return_index=True)[1]]
 
     # make array with unique users and last item and vice versa
-    graph['last_i'].u_code = graph['u'].code[unique_items_indexes]
-    graph['last_i'].i_code = graph['i'].code
     graph['last_u'].u_code = graph['u'].code
     graph['last_u'].i_code = graph['i'].code[unique_users_indexes]
+    graph['last_u'].t_code = sorted_time[sorted_users.shape[0] - 1 - np.unique(sorted_users[::-1], return_index=True)[1]]
 
-    assert check_graph(graph)
-
-
-def to_homogenous(hetero_graph):
-    # Leave ubi[0], set ubi[1] = ubi[1] + len(u)
-    # Set i = len(u) + i (cat u with i)
-    # put in n
-    # Dont do reverse edges
-    raise NotImplementedError()
+    graph['last_i'].u_code = graph['u'].code[unique_items_indexes]
+    graph['last_i'].i_code = graph['i'].code
+    graph['last_i'].t_code = sorted_time[sorted_items.shape[0] - 1 - np.unique(sorted_items[::-1], return_index=True)[1]]
