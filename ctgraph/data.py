@@ -1,4 +1,5 @@
 import datetime
+import pdb
 
 import numpy as np
 import pandas as pd
@@ -21,18 +22,19 @@ def refine_time(data):
     assures items bought by a user don't have the exact same time
     5, 1, 2, 2, 8 -> 1, 2, 3, 5, 8
     """
-    # TODO: Probably too slow for HM data. Maybe just add tiny random noise to data['t']? Also ensures there is no time dilation
 
-    data = data.sort_values(['t'], kind='mergesort')
-    time_seq = data['t'].values
-    time_gap = 1
+    # Ensure every t is a natural number
+    assert np.sum((data['t'].round() - data['t']).abs()) == 0
 
-    for i, da in enumerate(time_seq[0:-1]):
-        if time_seq[i] == time_seq[i + 1] or time_seq[i] > time_seq[i + 1]:
-            time_seq[i + 1] = time_seq[i + 1] + time_gap
-            time_gap += 1
+    # There needs to be a difference in time, but it can be tiny
+    # Since the t's are nats, we can add random noise in between 0 or 1 without changing
+    # the transaction order. I also divide by 4 to reduce the noise and shuffle to remove bias.
+    # With the arange I ensure every value becomes unique.
+    noise = np.arange(len(data))
+    np.random.shuffle(noise)
+    data['t'] = data['t'].values + noise / len(data) / 4
 
-    data['t'] = time_seq
+    assert len(data['t']) == len(data['t'].unique())
 
     return data
 

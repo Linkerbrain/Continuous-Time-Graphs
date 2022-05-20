@@ -34,11 +34,13 @@ class CTGR(RecommendationModule):
         elif self.params.convolution == 'GAT':
             edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
             convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
-                                          fill_value=0, heads=self.params.heads)
+                                          fill_value=0, heads=self.params.heads,
+                                          add_self_loops=self.params.add_self_loops)
         elif self.params.convolution == 'GATv2':
             edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
             convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
-                                            fill_value=0, heads=self.params.heads)
+                                            fill_value=0, heads=self.params.heads,
+                                            add_self_loops=self.params.add_self_loops)
         elif self.params.convolution == 'SG':
             assert self.params.homogenous
             # SGConv does all the convolutions at once (parameter K)
@@ -103,6 +105,7 @@ class CTGR(RecommendationModule):
                             help='Manually simulate heterogenity for convolution operators that do not support it')
         parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'temporal'])
         parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
+        parser.add_argument('--add_self_loops', action='store_true')
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None
