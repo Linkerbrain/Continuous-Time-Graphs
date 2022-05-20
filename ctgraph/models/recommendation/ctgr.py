@@ -222,6 +222,9 @@ class CTGR(RecommendationModule):
         layer_embeddings_u = [x_dict['u'][predict_u]]
         for i, conv in enumerate(self.convs):
             if self.params.edge_attr == 'positional' or self.params.edge_attr == 'temporal':
+                # Note that GAT and GATv2 actually also put the edge attributes through a weight matrix,
+                # this is unnecessary computation since the embeddings themselves are learnable too but
+                # otherwise I don't think it matters
                 x_dict = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
             else:
                 x_dict = conv(x_dict, edge_index_dict)
