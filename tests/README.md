@@ -1,3 +1,3 @@
 
-# Install sgat to the venv so pytest can find it
+# Install ctgraph to the venv so pytest can find it
 	pip install -e .
