@@ -34,11 +34,11 @@ class CTGR(RecommendationModule):
         elif self.params.convolution == 'GAT':
             edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
             convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
-                                          heads=self.params.heads)
+                                          fill_value=0, heads=self.params.heads)
         elif self.params.convolution == 'GATv2':
             edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
             convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
-                                            heads=self.params.heads)
+                                            fill_value=0, heads=self.params.heads)
         elif self.params.convolution == 'SG':
             assert self.params.homogenous
             # SGConv does all the convolutions at once (parameter K)
