@@ -38,6 +38,16 @@ def refine_time(data):
 
     return data
 
+def normalize_all_time(data):
+    """
+    moves the times to a region between 0 and 1
+    """
+    start = data['t'].min()
+    end = data['t'].max()
+
+    duration = end - start
+
+    data['t'] = (data['t'] - start) / duration
 
 # noinspection PyTypeChecker
 def amazon_dataset(name):
@@ -46,8 +56,12 @@ def amazon_dataset(name):
     df = pd.read_csv(f"{AMAZON_PATH}/{name.capitalize()}.csv").rename({"user_id": "u", "item_id": "i", "time": "t"},
                                                                       axis=1)
 
+    # make time unique per user by adding super tiny bit of noise
     df = df.groupby('u').apply(refine_time).reset_index(drop=True)
-    df['t'] = df['t'].astype('int64')
+    df['t'] = df['t'].astype('float64')
+
+    # normalize time
+    normalize_all_time(df)
 
     customers = df['u'].unique()
     articles = df['i'].unique()
