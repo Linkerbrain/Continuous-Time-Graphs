@@ -13,3 +13,4 @@ class UIHeteroData(HeteroData):
         if key == 'i_index':
             return self['u'].num_nodes
         return super().__inc__(key, value, *args, **kwargs)
+

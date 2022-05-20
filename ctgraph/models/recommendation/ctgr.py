@@ -32,10 +32,12 @@ class CTGR(RecommendationModule):
             assert self.params.homogenous or self.params.split_conv
             convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size)
         elif self.params.convolution == 'GAT':
-            convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size,
+            edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
+            convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
                                           heads=self.params.heads)
         elif self.params.convolution == 'GATv2':
-            convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size,
+            edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
+            convolution = lambda: GATv2Conv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
                                             heads=self.params.heads)
         elif self.params.convolution == 'SG':
             assert self.params.homogenous
@@ -62,13 +64,18 @@ class CTGR(RecommendationModule):
                 self.convs.add_module(f"conv_{i}", convolution())
                 self.convs2.add_module(f"conv2_{i}", convolution())
 
-        if self.params.convolution == 'SG':
-            # SGConv doesn't store intermediary convolutions so we just have the initial and the final onea
-            self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * 2)
+        if self.params.layered_embedding == 'cat':
+            if self.params.convolution == 'SG':
+                # SGConv doesn't store intermediary convolutions so we just have the initial and the final onea
+                self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * 2)
+            else:
+                # for the dot product at the end between the complete customer embedding and a candidate article
+                self.transform = nn.Linear(self.params.embedding_size,
+                                           self.params.embedding_size * (self.params.conv_layers + 1))
+        elif self.params.layered_embedding == 'mean':
+            self.transform = lambda x: x
         else:
-            # for the dot product at the end between the complete customer embedding and a candidate article
-            self.transform = nn.Linear(self.params.embedding_size,
-                                       self.params.embedding_size * (self.params.conv_layers + 1))
+            raise NotImplementedError()
 
         if self.params.edge_attr == 'positional':
             self.positional_user_embedding = nn.Embedding(self.params.n_max_trans,
@@ -95,6 +102,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--split_conv', action='store_true',
                             help='Manually simulate heterogenity for convolution operators that do not support it')
         parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'temporal'])
+        parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None
@@ -126,6 +134,14 @@ class CTGR(RecommendationModule):
 
         return predictions
 
+    def combine_layer_embeddings(self, layer_embeddings: list):
+        if self.params.layered_embedding == 'cat':
+            return torch.cat(layer_embeddings, dim=1)
+        elif self.params.layered_embedding == 'mean':
+            return sum(layer_embeddings) / len(layer_embeddings)
+        else:
+            raise NotImplementedError()
+
     def get_layered_embeddings_split(self, graph, predict_u):
         x_dict = {
             'u': self.user_embedding(graph['u'].code),
@@ -133,7 +149,7 @@ class CTGR(RecommendationModule):
         }
         edge_index = graph['u', 'b', 'i'].edge_index
         n_users = graph['u'].code.shape[0]
-        layered_embeddings_u = [x_dict['u'][predict_u]]
+        layer_embeddings_u = [x_dict['u'][predict_u]]
         for i, conv, conv2 in zip(range(len(self.convs)), self.convs, self.convs2):
             x = torch.cat((x_dict['u'], x_dict['i']))
             x_dict['u'] = conv(x, edge_index)[:n_users]
@@ -143,8 +159,8 @@ class CTGR(RecommendationModule):
             if i != len(self.convs) - 1:
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
 
-            layered_embeddings_u.append(x_dict['u'][predict_u])
-        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+            layer_embeddings_u.append(x_dict['u'][predict_u])
+        layered_embeddings_u = self.combine_layer_embeddings(layer_embeddings_u)
         return layered_embeddings_u
 
     def get_layered_embeddings_homo(self, graph, predict_u):
@@ -161,17 +177,18 @@ class CTGR(RecommendationModule):
         edge_index = homo_graph.edge_index
         # TODO: edge_attr_dict with positional embeddings and such for GAT
         # TODO: Treat articles and users symmetrically: get layered embedding for both
-        layered_embeddings_u = [x[predict_u]]
+        layer_embeddings_u = [x[predict_u]]
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
             x = self.activation(x)
-            layered_embeddings_u.append(x[predict_u])
+            # Since the concatenation by to_homogenous puts
+            # users in the front we don't need to translate their indices
+            layer_embeddings_u.append(x[predict_u])
             if i != len(self.convs) - 1:
                 x = self.dropout(x)
-        # Grab the layered embeddings from the users to predict. Since the concatenation by to_homogenous puts
-        # them in the front we don't need to translate their indices
+        # Grab the layered embeddings from the users to predict.
         # Note: For SGConv this is not really a layered embedding but just the output and input embeddings
-        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+        layered_embeddings_u = self.combine_layer_embeddings(layer_embeddings_u)
         return layered_embeddings_u
 
     def get_layered_embeddings(self, graph, predict_u):
@@ -188,7 +205,7 @@ class CTGR(RecommendationModule):
         if self.params.edge_attr == 'positional':
             rui = relative_order(graph['u', 'b', 'i'].oui, graph['u', 'b', 'i'].edge_index[0],
                                  n=self.params.n_max_trans)
-            riu = relative_order(graph['u', 'b', 'i'].oiu, graph['u', 'b', 'i'].edge_index[0],
+            riu = relative_order(graph['u', 'b', 'i'].oiu, graph['u', 'b', 'i'].edge_index[1],
                                  n=self.params.n_max_trans)
             # u b i points to items thus updates the item embeddings and should use riu
             # i rev_b u it the other way around
@@ -199,7 +216,7 @@ class CTGR(RecommendationModule):
 
         # TODO: edge_attr_dict with positional embeddings and such for GAT
         # TODO: Treat articles and users symmetrically: get layered embedding for both
-        layered_embeddings_u = [x_dict['u'][predict_u]]
+        layer_embeddings_u = [x_dict['u'][predict_u]]
         for i, conv in enumerate(self.convs):
             if self.params.edge_attr == 'positional' or self.params.edge_attr == 'temporal':
                 x_dict = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
@@ -209,7 +226,8 @@ class CTGR(RecommendationModule):
             if i != len(self.convs) - 1:
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
 
-            layered_embeddings_u.append(x_dict['u'][predict_u])
-        layered_embeddings_u = torch.cat(layered_embeddings_u, dim=1)
+            layer_embeddings_u.append(x_dict['u'][predict_u])
+
+        layered_embeddings_u = self.combine_layer_embeddings(layer_embeddings_u)
         # layered_embeddings_u = layered_embeddings_u[predict_u]
         return layered_embeddings_u

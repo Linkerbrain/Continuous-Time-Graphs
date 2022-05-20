@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset
 from typing import Sized, Iterable
 
+from torch_geometric.data import HeteroData
 from tqdm.auto import tqdm
 import os
 from os import path
@@ -12,6 +13,10 @@ from tqdm.auto import tqdm
 from ctgraph import logger
 
 import sys
+
+from ctgraph.datasets.ui_hetero_data import UIHeteroData
+
+import pathlib
 
 DEFAULT_DATA_DIR = "./precomputed_data/"
 
@@ -30,13 +35,14 @@ class DiskDataset(Dataset):
 
     def __getitem__(self, item):
         location = path.join(self.root_dir, _item_name(item))
-        return torch.load(location)
+        data = torch.load(location)
+        return data
 
     def putitem(self, graph):
         item = self.size
         location = path.join(self.root_dir, _item_name(item))
-        if not path.exists(self.root_dir):
-            os.mkdir(self.root_dir)
+
+        pathlib.Path(self.root_dir).mkdir(parents=True, exist_ok=True)
 
         torch.save(graph, location)
         self.size += 1
