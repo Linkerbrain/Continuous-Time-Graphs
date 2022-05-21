@@ -2,10 +2,42 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.nn.utils import weight_norm
+from siren_pytorch import SirenNet
 
-"""
-Based on https://github.com/dwromero/ckconv/blob/master/ckconv/nn/ckconv.py
-"""
+
+""" using Siren library """
+
+class SirenLibraryKernel(nn.Module):
+    def __init__(self,
+                    in_size = 1,
+                    out_size = 64*64,
+                    layer_sizes = [32, 64],
+                    omega_0 = 30,
+                    bias = False
+                ):
+        super().__init__()
+
+        self.siren = SirenNet(
+            dim_in = in_size,                        # input dimension, ex. 2d coor
+            dim_hidden = layer_sizes[0],         # todo make single parameter                  # hidden dimension
+            dim_out = out_size,                       # output dimension, ex. rgb value
+            num_layers = len(layer_sizes),                    # number of layers
+            final_activation = nn.Identity(),   # activation of final layer (nn.Identity() for direct output)
+            w0_initial = omega_0                   # different signals may require different omega_0 in the first layer - this is a hyperparameter
+        )
+
+    def forward(self, t):
+        # give each t their own dim
+        if t.ndim == 1:
+            t = t.unsqueeze(-1)
+
+        # compute kernel
+        out = self.siren(t)
+
+        return out
+
+
+""" utils """
 
 # From LieConv
 class Expression(torch.nn.Module):
@@ -36,7 +68,13 @@ def Sine():
     """
     return Expression(lambda x: torch.sin(x))
 
-class SirenKernel(nn.Module): # Siren Kernel
+""" Kernel """
+
+class SirenCustomKernel(nn.Module):
+    """
+    Based on ckconv github
+    https://github.com/dwromero/ckconv/blob/master/ckconv/nn/ckconv.py
+    """
     def __init__(self,
                 in_size = 1,
                 out_size = 64*64,

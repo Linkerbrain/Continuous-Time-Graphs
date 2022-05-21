@@ -9,7 +9,7 @@ from ctgraph.models.recommendation.module import RecommendationModule
 from ctgraph.models.recommendation.ckconv_layer import CKConv
 
 """
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 50 --batch_size 50 --batch_accum 1 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --val_extra_n_vals 1 --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 50 --batch_size 1 --batch_accum 50 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --val_extra_n_vals 1 --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_user 1500
 
 """
 
@@ -30,8 +30,8 @@ class CKConvModel(RecommendationModule):
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
 
-        self.hidden_size = 32 # self.params.embedding_size
-        self.num_layers = 0 # self.params.num_layers
+        self.hidden_size = 16 # self.params.embedding_size
+        self.num_layers = 1 # self.params.num_layers
 
         """ layers """
         # embedding
@@ -56,21 +56,20 @@ class CKConvModel(RecommendationModule):
         i_code = batch['i'].code
         edge_index = batch[('u', 'b', 'i')].edge_index
 
+        user_per_trans, item_per_trans = edge_index[0, :], edge_index[1, :]
+        edges_t = batch[('u', 'b', 'i')].t
+
         # Step 1. Embedding
         hu = self.user_embedding(u_code) # (u, h)
         hi = self.item_embedding(i_code) # (i, h)
 
-        # Step 2a. Prepare adjacency matrix
-        edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1], device=edge_index.device), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
-        user_per_trans, item_per_trans = edges.indices()
 
         # Step 2b. Convolve over adjacency matrix
         hu_list = [hu]
         hi_list = [hi]
         for conv in self.conv_layers:
-
             # do convolution, get new user (hLu) en item (hLi) information
-            hLu, hLi = conv(hu, hi, edges)
+            hLu, hLi = conv(hu, hi, user_per_trans, item_per_trans, edges_t)
 
             hu_concat = torch.hstack((hLu, hu)).float()
             hi_concat = torch.hstack((hLi, hi)).float()
