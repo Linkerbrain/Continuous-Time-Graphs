@@ -105,7 +105,7 @@ class CTGR(RecommendationModule):
                             help='Manually simulate heterogenity for convolution operators that do not support it')
         parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'temporal'])
         parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
-        parser.add_argument('--add_self_loops', action='store_true')
+        parser.add_argument('--add_self_loops', action='store_true', help='For the attention convolutions')
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None

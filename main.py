@@ -134,12 +134,9 @@ def make_logger(params):
             run = neptune.init(tags=["training", "graph_nn"])
             neptune = NeptuneLogger(run=run)
         else:
-            raise NotImplementedError
-            # run = neptune.init(run=params.load_checkpoint)
-            # neptune = NeptuneLogger(run=run)
-            # checkpoint_path = neptune.experiment["training/model/best_model_path"].fetch()
-            # checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-            # model.load_state_dict(checkpoint['state_dict'])
+            run = neptune.init(run=params.load_checkpoint)
+            neptune = NeptuneLogger(run=run)
+
         for k, v in vars(params).items():
             neptune.experiment[f'global/params/{k}'] = str(v)
         neptune.experiment[f'global/info'] = params.info
@@ -149,6 +146,97 @@ def make_logger(params):
             raise NotImplementedError("Need to use logger (neptune) for checkpoints")
 
     return neptune
+
+
+def load_best_model(neptune_logger, model):
+    checkpoint_path = neptune_logger.experiment["training/model/best_model_path"].fetch()
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    model.load_state_dict(checkpoint['state_dict'])
+    logger.info(f"Loaded best model '{checkpoint_path}'")
+
+
+def main(params):
+    # Set all the seeds
+    random.seed(params.seed)
+    np.random.seed(params.seed)
+    torch.manual_seed(params.seed)
+
+    # initiate (Neptune) loader
+    neptune_logger = make_logger(params)
+
+    # experiment name of data
+    data_name = f"{params.dataset}_{params.sampler}_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
+
+    if params.newsampler:
+        data_name += "_newsampled"
+        if params.sample_all:
+            data_name += "_sampleall"
+
+    if params.partial_save:
+        data_name += "_partial_save"
+
+    # load from disk
+    if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:
+
+        graph, train_data, val_data, test_data = load_dataset(data_name, params)
+    # or compute new data
+    else:
+        # parse entire dataset
+        graph = make_graph(params)
+
+        # sample and make loaders
+        train_data, val_data, test_data = make_datasets(graph, data_name, params,
+                                                        neptune_logger)
+
+    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(train_data, val_data, test_data,
+                                                                                     params)
+
+    # initiate model
+    model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
+
+    if params.load_checkpoint is not None:
+        load_best_model(neptune_logger, model)
+    else:
+        neptune_logger.log_model_summary(model=model, max_depth=-1)
+
+    # make trainer
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=2, save_last=True, monitor=params.monitor, mode='max')
+
+    # TODO: This is dirty probably should just remove this flag
+    assert params.val_extra_n_vals == 1, f"For model checkpointing you need to calculate {params.monitor} on every validation"
+
+    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune_logger,  # track_grad_norm=2,
+                         accumulate_grad_batches=params.batch_accum,
+                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
+                         accelerator=params.accelerator,
+                         devices=params.devices,
+                         log_every_n_steps=1,
+                         check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
+                         callbacks=[checkpoint_callback],
+                         num_sanity_val_steps=2 if not params.novalidate else 0,
+                         strategy='ddp_sharded' if params.devices > 1 else None)
+
+    # train
+    if not params.notrain:
+        task = Task('Training model').start()
+        trainer.fit(model)
+        task.done()
+
+    # validate
+    if not params.novalidate:
+        task = Task('Validating model').start()
+        trainer.validate(model)
+        task.done()
+
+    # test
+    if not params.notest:
+        task = Task('Testing best model').start()
+        load_best_model(neptune_logger, model)
+        trainer.test(model, test_dataloader_gen(model.current_epoch))
+        task.done()
+
+    # For interactive sessions/debugging
+    return locals()
 
 
 def subparse_model(subparser, name, module):
@@ -194,8 +282,7 @@ def parse_params():
     parser_train.add_argument('--precision', type=str, default='32')
     parser_train.add_argument('--devices', type=int, default=1)
     parser_train.add_argument('--load_checkpoint', type=str, default=None)
-    parser_train.add_argument('--monitor', type=str, default='val/MAP_neighbour',
-                              choices=['val/MAP_neighbour', 'val/MAP_random'])
+    parser_train.add_argument('--monitor', type=str, default='val/dcg10_epoch')
     parser_train.add_argument('--notrain', action='store_true')
     parser_train.add_argument('--novalidate', action='store_true')
     parser_train.add_argument('--norich', action='store_true')
@@ -219,81 +306,6 @@ def parse_params():
     params = parser.parse_args()
 
     return params
-
-
-def main(params):
-    # Set all the seeds
-    random.seed(params.seed)
-    np.random.seed(params.seed)
-    torch.manual_seed(params.seed)
-
-    # initiate (Neptune) loader
-    neptune_logger = make_logger(params)
-
-    # experiment name of data
-    data_name = f"{params.dataset}_{params.sampler}_n{params.n_max_trans}_m{params.m_order}_numuser{params.num_users}"
-
-    if params.newsampler:
-        data_name += "_newsampled"
-        if params.sample_all:
-            data_name += "_sampleall"
-
-    if params.partial_save:
-        data_name += "_partial_save"
-
-    # load from disk
-    if path.exists(path.join("./precomputed_data/", data_name)) and not params.dontloadfromdisk:
-
-        graph, train_data, val_data, test_data = load_dataset(data_name, params)
-    # or compute new data
-    else:
-        # parse entire dataset
-        graph = make_graph(params)
-
-        # sample and make loaders
-        train_data, val_data, test_data = make_datasets(graph, data_name, params,
-                                                    neptune_logger)
-
-    train_dataloader_gen, val_dataloader_gen, test_dataloader_gen = make_dataloaders(train_data, val_data, test_data,
-                                                                                     params)
-
-    # initiate model
-    model = make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dataloader_gen)
-
-    # make trainer
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=0, monitor=params.monitor, mode='max')
-
-    trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune_logger,  # track_grad_norm=2,
-                         accumulate_grad_batches=params.batch_accum,
-                         precision=int(params.precision) if params.precision.isdigit() else params.precision,
-                         accelerator=params.accelerator,
-                         devices=params.devices,
-                         log_every_n_steps=1,
-                         check_val_every_n_epoch=params.val_epochs if not params.novalidate else int(10e9),
-                         callbacks=[checkpoint_callback],
-                         num_sanity_val_steps=2 if not params.novalidate else 0,
-                         strategy='ddp_sharded' if params.devices > 1 else None)
-
-    # train
-    if not params.notrain:
-        task = Task('Training model').start()
-        trainer.fit(model)
-        task.done()
-
-    # validate
-    if not params.novalidate:
-        task = Task('Validating model').start()
-        trainer.validate(model)
-        task.done()
-
-    # test
-    if not params.notest:
-        task = Task('Testing model').start()
-        trainer.test(model, test_dataloader_gen(model.current_epoch))
-        task.done()
-
-    # For interactive sessions/debugging
-    return locals()
 
 
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ class RecommendationModule(pl.LightningModule):
         parser.add_argument('--no_MAP_neighbour', action='store_true')
         parser.add_argument('--train_style', type=str, default='binary',
                             choices=['binary', 'dgsr_softmax', 'eval'])
-        parser.add_argument('--val_extra_n_vals', type=int, default=5)
+        parser.add_argument('--val_extra_n_vals', type=int, default=1)
 
     @staticmethod
     def add_args(parser):
@@ -257,8 +257,7 @@ class RecommendationModule(pl.LightningModule):
                 self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
 
 
-        # calculate dcg and recall
-        if extra or ((self.current_epoch+1) % (self.params.val_epochs * self.params.val_extra_n_vals) == 0):
+        if extra or (self.current_epoch % (self.params.val_epochs * self.params.val_extra_n_vals) == 0):
             # Do a test_step but with the validation data, so the test set remains untouched
             self.random_metrics(batch, namespace)
 
