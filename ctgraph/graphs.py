@@ -254,6 +254,29 @@ def add_oui_and_oiu(graph):
     graph[('u', 'b', 'i')].oiu = oiu
 
 
+def add_relative_time(graph):
+    df = pd.DataFrame({'u': graph['u', 'b', 'i'].edge_index[0], 't': graph['u', 'b', 'i'].t})
+    groupby = df.groupby('u').max()
+
+    graph['u'].t_max = groupby.sort_values('u')['t'].values
+
+    df = pd.DataFrame({'i': graph['u', 'b', 'i'].edge_index[1], 't': graph['u', 'b', 'i'].t})
+    groupby = df.groupby('i').max()
+
+    graph['i'].t_max = groupby.sort_values('i')['t'].values
+
+    df = pd.DataFrame({'u': graph['u', 'b', 'i'].edge_index[0], 't': graph['u', 'b', 'i'].t})
+    groupby = df.groupby('u').min()
+
+    graph['u'].t_min = groupby.sort_values('u')['t'].values
+
+    df = pd.DataFrame({'i': graph['u', 'b', 'i'].edge_index[1], 't': graph['u', 'b', 'i'].t})
+    groupby = df.groupby('i').min()
+
+    graph['i'].t_min = groupby.sort_values('i')['t'].values
+
+    assert graph['u'].t_max >= graph['u'].t_min
+    assert graph['i'].t_max >= graph['i'].t_min
 
 
 def add_last(graph):

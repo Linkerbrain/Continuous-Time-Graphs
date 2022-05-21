@@ -7,7 +7,7 @@ import numpy_indexed as npi
 from torch.utils.data import Dataset
 
 from ctgraph import logger
-from ctgraph.graphs import add_random_eval_edges, numpy_to_torch, add_oui_and_oiu, add_last
+from ctgraph.graphs import add_random_eval_edges, numpy_to_torch, add_oui_and_oiu, add_last, add_relative_time
 from ctgraph.datasets.ui_hetero_data import UIHeteroData
 
 class SubsetLoader():
@@ -57,6 +57,9 @@ class SubsetLoader():
 
         #add last items and users to ('u', 'b', 'i')
         add_last(subgraph)
+
+        # add time relative to users / items
+        add_relative_time(subgraph)
 
         # convert arrays to torch tensors
         subgraph_data = numpy_to_torch(subgraph)

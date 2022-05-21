@@ -103,7 +103,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--dropout', type=float, default=0.25)
         parser.add_argument('--split_conv', action='store_true',
                             help='Manually simulate heterogenity for convolution operators that do not support it')
-        parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'temporal'])
+        parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'continuous'])
         parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
         parser.add_argument('--add_self_loops', action='store_true', help='For the attention convolutions')
 
@@ -216,12 +216,19 @@ class CTGR(RecommendationModule):
                 ('u', 'b', 'i'): self.positional_item_embedding(riu),
                 ('i', 'rev_b', 'u'): self.positional_user_embedding(rui)
             }
+        elif self.params.edge_attr == 'continuous':
+            import pdb; pdb.set_trace()
+            edge_attr_dict = {
+                ('u', 'b', 'i'): self.positional_item_embedding(riu),
+                ('i', 'rev_b', 'u'): self.positional_user_embedding(rui)
+            }
+
 
         # TODO: edge_attr_dict with positional embeddings and such for GAT
         # TODO: Treat articles and users symmetrically: get layered embedding for both
         layer_embeddings_u = [x_dict['u'][predict_u]]
         for i, conv in enumerate(self.convs):
-            if self.params.edge_attr == 'positional' or self.params.edge_attr == 'temporal':
+            if self.params.edge_attr == 'positional' or self.params.edge_attr == 'continuous':
                 # Note that GAT and GATv2 actually also put the edge attributes through a weight matrix,
                 # this is unnecessary computation since the embeddings themselves are learnable too but
                 # otherwise I don't think it matters
