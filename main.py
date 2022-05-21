@@ -202,9 +202,6 @@ def main(params):
     # make trainer
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=2, save_last=True, monitor=params.monitor, mode='max')
 
-    # TODO: This is dirty probably should just remove this flag
-    assert params.val_extra_n_vals == 1, f"For model checkpointing you need to calculate {params.monitor} on every validation"
-
     trainer = pl.Trainer(max_epochs=params.epochs, logger=neptune_logger,  # track_grad_norm=2,
                          accumulate_grad_batches=params.batch_accum,
                          precision=int(params.precision) if params.precision.isdigit() else params.precision,

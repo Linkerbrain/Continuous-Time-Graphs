@@ -275,8 +275,8 @@ def add_relative_time(graph):
 
     graph['i'].t_min = groupby.sort_values('i')['t'].values
 
-    assert graph['u'].t_max >= graph['u'].t_min
-    assert graph['i'].t_max >= graph['i'].t_min
+    assert np.all(graph['u'].t_max >= graph['u'].t_min)
+    assert np.all(graph['i'].t_max >= graph['i'].t_min)
 
 
 def add_last(graph):
