@@ -258,7 +258,7 @@ class RecommendationModule(pl.LightningModule):
 
 
         # calculate dcg and recall
-        if extra or (self.current_epoch != 0 and (self.current_epoch+1) % (self.params.val_epochs * self.params.val_extra_n_vals) == 0):
+        if extra or ((self.current_epoch+1) % (self.params.val_epochs * self.params.val_extra_n_vals) == 0):
             # Do a test_step but with the validation data, so the test set remains untouched
             self.random_metrics(batch, namespace)
 

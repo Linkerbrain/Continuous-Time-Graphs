@@ -25,14 +25,14 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         self.do_shortterm = shortterm
 
         """ layers """
-        self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
-        self.w2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
+        self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Attention Item
+        self.w2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Attention User
 
-        self.w1b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
-        self.w2b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
+        self.w1b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Item
+        self.w2b = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term User
 
-        self.w3 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term User
-        self.w4 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term Item
+        self.w3 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term Item
+        self.w4 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term User
 
         self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
         self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
@@ -42,11 +42,11 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
     def longterm(self, u_embedded, i_embedded, edge_index, rui, riu):
         # --- long term ---
 
-        user_messages = self.w2(u_embedded) # (u, h)
-        item_messages = self.w1(i_embedded) # (i, h)
+        user_messages_for_attention = self.w2(u_embedded) # (u, h)
+        item_messages_for_attention = self.w1(i_embedded) # (i, h)
 
         # message similarity
-        e = (user_messages) @ (item_messages).T # (u, i)
+        e = (user_messages_for_attention) @ (item_messages_for_attention).T # (u, i)
         e = sparse_dense_mul(edge_index, e) # (u, i)
 
         user_per_trans, item_per_trans = edge_index.indices()
@@ -57,7 +57,7 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         pVui = self.pV(rui)
 
         # dot product van elke pos embedding met betreffende user
-        u_at_pVui = torch.einsum('ij, ij->i', user_messages[user_per_trans], pVui)
+        u_at_pVui = torch.einsum('ij, ij->i', user_messages_for_attention[user_per_trans], pVui)
 
         # alpha is softmax(wu @ wi.T + wu @ p)
         e_ui = torch.sparse_coo_tensor(e._indices(), e._values() + u_at_pVui, e.size())
@@ -69,7 +69,7 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         pKiu = self.pK(riu)
 
         # dot product van elke pos embedding met betreffende user
-        u_at_pKiu = torch.einsum('ij, ij->i', item_messages[item_per_trans], pKiu)
+        u_at_pKiu = torch.einsum('ij, ij->i', item_messages_for_attention[item_per_trans], pKiu)
 
         # beta is softmax(wi @ wu.T + wi @ p)
         e_trans = torch.transpose(e, 0, 1)

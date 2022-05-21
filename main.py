@@ -118,6 +118,8 @@ def make_model(graph, params, train_dataloader_gen, val_dataloader_gen, test_dat
         model = ctgraph.models.recommendation.ctgr.CTGR(graph, params, train_dataloader_gen, val_dataloader_gen)
     elif params.model == 'DUMMY':
         model = ctgraph.models.recommendation.dummy.Dummy(graph, params, train_dataloader_gen, val_dataloader_gen)
+    elif params.model == 'CKCONV':
+        model = ctgraph.models.recommendation.ckconv_model.CKConvModel(graph, params, train_dataloader_gen, val_dataloader_gen)
     else:
         raise NotImplementedError()
     return model
@@ -209,6 +211,7 @@ def parse_params():
     model_subparser = parser_train.add_subparsers(dest='model')
 
     subparse_model(model_subparser, 'DGSR', ctgraph.models.recommendation.dgsr.DGSR)
+    subparse_model(model_subparser, 'CKCONV', ctgraph.models.recommendation.ckconv_model.CKConvModel)
     subparse_model(model_subparser, 'CTGR', ctgraph.models.recommendation.ctgr.CTGR)
     subparse_model(model_subparser, 'DUMMY', ctgraph.models.recommendation.dummy.Dummy)
 
