@@ -6,10 +6,11 @@ import numpy as np
 from ctgraph import logger
 from ctgraph.models.recommendation.module import RecommendationModule
 
+from ctgraph.models.recommendation.sumconv import SumConv
 from ctgraph.models.recommendation.ckconv_layer import CKConv
 
 """
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 50 --batch_size 1 --batch_accum 50 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --val_extra_n_vals 1 --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_user 1500
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 16 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 50 --num_layers 3 --sumconv neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 
 """
 
@@ -17,11 +18,10 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_sa
 class CKConvModel(RecommendationModule):
     @staticmethod
     def add_args(parser):
-        # self.params.embedding_size
-        # self.params.num_layers
-        pass
+        parser.add_argument('--embedding_size', type=int, default=25)
+        parser.add_argument('--num_layers', type=int, default=3)
+        parser.add_argument('--sumconv', action='store_true')
 
-    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -30,8 +30,11 @@ class CKConvModel(RecommendationModule):
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
 
-        self.hidden_size = 16 # self.params.embedding_size
-        self.num_layers = 1 # self.params.num_layers
+        self.hidden_size = self.params.embedding_size
+        self.num_layers = self.params.num_layers
+
+        # baseline test:
+        self.sumconv = self.params.sumconv
 
         """ layers """
         # embedding
@@ -40,7 +43,10 @@ class CKConvModel(RecommendationModule):
 
         self.conv_layers = nn.ModuleList()
         for _ in range(self.num_layers):
-            self.conv_layers.append(CKConv(self.hidden_size))
+            if self.sumconv:
+                self.conv_layers.append(SumConv())
+            else:
+                self.conv_layers.append(CKConv(self.hidden_size))
 
         # propagate by concatting h || h(l-1)
         num_concats = 2
@@ -63,13 +69,12 @@ class CKConvModel(RecommendationModule):
         hu = self.user_embedding(u_code) # (u, h)
         hi = self.item_embedding(i_code) # (i, h)
 
-
-        # Step 2b. Convolve over adjacency matrix
+        # Step 2. Convolve
         hu_list = [hu]
         hi_list = [hi]
         for conv in self.conv_layers:
             # do convolution, get new user (hLu) en item (hLi) information
-            hLu, hLi = conv(hu, hi, user_per_trans, item_per_trans, edges_t)
+            hLu, hLi = conv(hu, hi, user_per_trans, item_per_trans, edges_t, batch['u'].t_max, batch['i'].t_max)
 
             hu_concat = torch.hstack((hLu, hu)).float()
             hi_concat = torch.hstack((hLi, hi)).float()

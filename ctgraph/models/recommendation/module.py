@@ -117,8 +117,6 @@ class RecommendationModule(pl.LightningModule):
         # This is not the number of users but the number of interactions used for supervision
         batch_size = len(predict_u)
 
-        print(float(batch['u'].code.shape[0]))
-
         self.log(f'{namespace}/loss', loss, batch_size=batch_size, on_step=True, on_epoch=True)
 
         self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size, on_step=True, on_epoch=True)
