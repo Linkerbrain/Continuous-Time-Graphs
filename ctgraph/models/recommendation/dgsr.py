@@ -118,8 +118,8 @@ class DGSR(RecommendationModule):
         oiu = batch[('u', 'b', 'i')].oiu
 
         last_user_user_code = batch[('last_u')].u_code
-        last_user_item_code = batch[('last_u')].i_code
-        last_item_user_code = batch[('last_i')].u_code
+        last_user_item_code = batch[('last_u')].i_code_index
+        last_item_user_code = batch[('last_i')].u_code_index
         last_item_item_code = batch[('last_i')].i_code
 
         last_user = (last_user_user_code, last_user_item_code)

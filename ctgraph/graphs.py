@@ -297,9 +297,9 @@ def add_last(graph):
 
     # make array with unique users and last item and vice versa
     graph['last_u'].u_code = graph['u'].code
-    graph['last_u'].i_code = graph['i'].code[unique_users_indexes]
+    graph['last_u'].i_code_index = unique_users_indexes
     graph['last_u'].t_code = sorted_time[sorted_users.shape[0] - 1 - np.unique(sorted_users[::-1], return_index=True)[1]]
 
-    graph['last_i'].u_code = graph['u'].code[unique_items_indexes]
+    graph['last_i'].u_code_index = unique_items_indexes
     graph['last_i'].i_code = graph['i'].code
     graph['last_i'].t_code = sorted_time[sorted_items.shape[0] - 1 - np.unique(sorted_items[::-1], return_index=True)[1]]
