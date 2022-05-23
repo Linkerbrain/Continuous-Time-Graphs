@@ -30,3 +30,12 @@ class Dummy(RecommendationModule):
             r = torch.stack([predict_u, predict_i], dim=0).cpu().numpy()
             p = torch.relu(p) * torch.tensor(npi.contains(t, r, axis=1)).float()
         return p
+
+
+class ComputeDistribution(Dummy):
+    def __init__(self, *args, **kwargs):
+        super(ComputeDistribution, self).__init__(*args, **kwargs)
+        times = []
+
+    def forward(self, graph, predict_u, predict_i, predict_i_ptr=True):
+        pass

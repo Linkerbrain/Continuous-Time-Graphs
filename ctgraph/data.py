@@ -60,6 +60,7 @@ def amazon_dataset(name):
     df = df.groupby('u').apply(refine_time).reset_index(drop=True)
     df['t'] = df['t'].astype('float64')
 
+
     # normalize time
     normalize_all_time(df)
 

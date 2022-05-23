@@ -44,6 +44,9 @@ class RecommendationModule(pl.LightningModule):
         parser.add_argument('--no_MAP_neighbour', action='store_true')
         parser.add_argument('--train_style', type=str, default='binary',
                             choices=['binary', 'dgsr_softmax', 'eval'])
+        parser.add_argument('--lr', type=float, default=0.001)
+        parser.add_argument('--decay', type=float, default=0.0001)
+        parser.add_argument('--amsgrad', action='store_true')
 
     @staticmethod
     def add_args(parser):
@@ -93,7 +96,7 @@ class RecommendationModule(pl.LightningModule):
             positives_mean = torch.mean(predictions[:, target_i_code])
             negatives_mean = (torch.sum(predictions) - positives_mean * len(target_i_code)) / (
                     predictions.shape[1] - len(target_i_code))
-                    
+
         elif self.params.train_style == 'eval':
             predict_u = batch['eval'].u_index
             target_i_code = batch['eval'].i_code
@@ -114,22 +117,24 @@ class RecommendationModule(pl.LightningModule):
         # This is not the number of users but the number of interactions used for supervision
         batch_size = len(predict_u)
 
+        print(float(batch['u'].code.shape[0]))
+
         self.log(f'{namespace}/loss', loss, batch_size=batch_size, on_step=True, on_epoch=True)
 
         self.log(f'{namespace}/positives_mean', positives_mean, batch_size=batch_size, on_step=True, on_epoch=True)
         self.log(f'{namespace}/negatives_mean', negatives_mean, batch_size=batch_size, on_step=True, on_epoch=True)
 
-        self.log(f'{namespace}/n_customers', float(batch['u'].code.shape[0]), batch_size=batch_size)
-        self.log(f'{namespace}/n_articles', float(batch['i'].code.shape[0]), batch_size=batch_size)
+        self.log(f'{namespace}/n_customers', float(batch['u'].code.shape[0]), on_step=True, batch_size=batch_size)
+        self.log(f'{namespace}/n_articles', float(batch['i'].code.shape[0]), on_step=True, batch_size=batch_size)
 
         if predict_i is not None:
-            self.log(f'{namespace}/n_target_articles', float(len(torch.unique(predict_i))), batch_size=batch_size)
-        self.log(f'{namespace}/n_target_customers', float(len(torch.unique(predict_u))), batch_size=batch_size)
+            self.log(f'{namespace}/n_target_articles', float(len(torch.unique(predict_i))), on_step=True, batch_size=batch_size)
+        self.log(f'{namespace}/n_target_customers', float(len(torch.unique(predict_u))), on_step=True, batch_size=batch_size)
 
-        self.log(f'{namespace}/n_transactions', float(len(batch['u', 'b', 'i'].edge_index[0])), batch_size=batch_size)
-        self.log(f'{namespace}/n_targets', float(batch_size), batch_size=batch_size)
+        self.log(f'{namespace}/n_transactions', float(len(batch['u', 'b', 'i'].edge_index[0])), on_step=True, batch_size=batch_size)
+        self.log(f'{namespace}/n_targets', float(batch_size), on_step=True, batch_size=batch_size)
 
-        self.log(f'{namespace}/time', time.time(), batch_size=batch_size)
+        self.log(f'{namespace}/time', time.time(), on_step=True, on_epoch=True, batch_size=batch_size)
 
         return loss
 
@@ -248,13 +253,14 @@ class RecommendationModule(pl.LightningModule):
             # COMPUTE MAP ON RANDOM EDGES
             if not self.params.no_MAP_random:
                 MAP_random = self.random_MAP(batch)
-                self.log(f'{namespace}/MAP_random', MAP_random, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
+                self.log(f'{namespace}/MAP_random', MAP_random, batch_size=len(supervised_predict_u), on_step=True,
+                         on_epoch=True)
 
             # COMPUTE MAP ON NEIGHBOURHOOD
             if not self.params.no_MAP_neighbour:
                 MAP_neighbourhood = self.neighbour_MAP(batch)
-                self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u), on_step=True, on_epoch=True)
-
+                self.log(f'{namespace}/MAP_neighbour', MAP_neighbourhood, batch_size=len(supervised_predict_u),
+                         on_step=True, on_epoch=True)
 
         # Do a test_step but with the validation data, so the test set remains untouched
         self.random_metrics(batch, namespace)
@@ -269,5 +275,6 @@ class RecommendationModule(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001, weight_decay=0.0001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.params.lr, weight_decay=self.params.decay,
+                                     amsgrad=self.params.amsgrad)
         return optimizer

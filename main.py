@@ -62,11 +62,12 @@ def make_graph(params):
 
 
 def make_dataloaders(train_data, val_data, test_data, params):
-    train_dataloader = DataLoader(train_data, batch_size=params.batch_size,
+    train_sampler = torch.utils.data.RandomSampler(train_data, replacement=params.replacement, num_samples=params.samples)
+    train_dataloader = DataLoader(train_data, batch_size=params.batch_size, pin_memory=params.pin_memory,
                                   shuffle=not params.noshuffle, num_workers=params.num_loader_workers)
-    val_dataloader = DataLoader(val_data, batch_size=params.batch_size,
+    val_dataloader = DataLoader(val_data, batch_size=params.batch_size, pin_memory=params.pin_memory,
                                 shuffle=False, num_workers=params.num_loader_workers)
-    test_dataloader = DataLoader(test_data, batch_size=params.batch_size,
+    test_dataloader = DataLoader(test_data, batch_size=params.batch_size, pin_memory=params.pin_memory,
                                  shuffle=False, num_workers=params.num_loader_workers)
 
     train_dataloader_gen = lambda _epoch: train_dataloader
@@ -291,6 +292,9 @@ def parse_params():
     parser_train.add_argument('--dontsave', action='store_true')
     parser_train.add_argument('--partial_save', action='store_true')
     parser_train.add_argument('--seed', type=int, default=0)
+    parser_train.add_argument('--samples', type=int, default=None)
+    parser_train.add_argument('--replacement', action='store_true')
+    parser_train.add_argument('--pin_memory', action='store_true')
 
     model_subparser = parser_train.add_subparsers(dest='model')
 
