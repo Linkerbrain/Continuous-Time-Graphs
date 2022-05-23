@@ -96,13 +96,13 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         # Get last item
         # last_item = get_last(user_messages.device, user_per_trans, item_per_trans, graph['i'].code).to(torch.int)
         last_item = last_u[1]
-        last_item_embedding = self.last_item_embedding(last_item)
+        last_item_embedding = i_embedded[last_item]
         last_item = self.w3(last_item_embedding)
 
         # Get last user from items
         # last_user = get_last(item_messages.device, item_per_trans, user_per_trans, graph['u'].code).to(torch.int)
         last_user = last_i[1]
-        last_user_embedding = self.last_user_embedding(last_user)
+        last_user_embedding = u_embedded[last_user]
         last_user = self.w4(last_user_embedding)
 
         # message similarity alpha

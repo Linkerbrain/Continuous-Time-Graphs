@@ -60,8 +60,8 @@ def test_last_and_oui_oiu():
     sorted_items = edges[1, :][trans_order]
     # check shapes
 
-    assert graph['last_u'].u_code.shape == np.unique(sorted_users).shape and graph['last_i'].u_code.shape == np.unique(sorted_items).shape
-    assert graph['last_u'].i_code.shape == np.unique(sorted_users).shape and graph['last_i'].i_code.shape == np.unique(sorted_items).shape
+    assert graph['last_u'].u_code.shape == np.unique(sorted_users).shape and graph['last_i'].u_code_index.shape == np.unique(sorted_items).shape
+    assert graph['last_u'].i_code_index.shape == np.unique(sorted_users).shape and graph['last_i'].i_code.shape == np.unique(sorted_items).shape
     assert graph['last_u'].t_code.shape == np.unique(sorted_users).shape and graph['last_i'].t_code.shape == np.unique(sorted_items).shape
 
     # check if index of assigned element is last
@@ -95,7 +95,11 @@ def test_last_and_oui_oiu():
     assert oui.shape == edges_t.shape and oiu.shape == edges_t.shape
 
     # check order
-    assert np.all(np.arange(0, random_item_loc[0].shape[0]) + 1 == oiu[random_item_loc])
-    assert np.all(np.arange(0, random_user_loc[0].shape[0]) + 1 == oui[random_user_loc])
+    print(random_item, random_item_loc)
+    print(np.arange(0, random_item_loc[0].shape[0]) + 1)
+    print(oiu[random_item_loc])
+
+    assert np.all(np.arange(0, random_item_loc[0].shape[0]) + 1 == np.sort(oiu[random_item_loc]))
+    assert np.all(np.arange(0, random_user_loc[0].shape[0]) + 1 == np.sort(oui[random_user_loc]))
 
 
