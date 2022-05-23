@@ -43,9 +43,9 @@ def print_error_line(string):
 
     print(b.FAIL + parts[0] + b.ENDC + ': ')
 
-def cool_traceback(func, params):
+def cool_traceback(func, *args, **kwargs):
     try:
-        func(params)
+        return func(*args, **kwargs)
     except Exception as e:
         data = traceback.format_exc().splitlines()
 

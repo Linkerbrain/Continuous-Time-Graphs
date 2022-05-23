@@ -29,7 +29,6 @@ from os import path
 import neptune.new as neptune
 
 def add_args(parser):
-    parser.add_argument('--days', type=int, default=None, help='subset of the data to train and test with')
     parser.add_argument('--epochs', type=int, default=1000)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--batch_accum', type=int, default=32)
@@ -190,6 +189,7 @@ def load_best_model(neptune_logger, model):
 
 
 def main(params):
+    xx
     # Set all the seeds
     random.seed(params.seed)
     np.random.seed(params.seed)
