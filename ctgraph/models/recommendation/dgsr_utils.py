@@ -32,7 +32,7 @@ def pass_messages(messages, adjacency, pVui):
     # add messages
     output.index_add_(0, user_per_trans, messages[item_per_trans] * alpha)
 
-    if pVui != None:
+    if pVui is not None:
         # add embeddings
         output.index_add_(0, user_per_trans, pVui * alpha)
 

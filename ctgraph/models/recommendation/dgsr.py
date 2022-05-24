@@ -13,47 +13,13 @@ from ctgraph import logger
 # import sys
 # sys.tracebacklimit = 2
 
+from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmbedder
+
 """
 lodewijk command
-# DGRN CPU
-python main.py --dataset beauty train --accelerator cpu  --val_epochs 2 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
-
-# DGRN GPU
-python main.py --dataset beauty train --nologger --accelerator gpu --devices 1 --val_epochs 5 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 periodic --chunk_size 10000000 --skip_chunks 15
-
-# MH model
-python main.py --dataset beauty train --nologger --accelerator cpu MH periodic --chunk_size 10000000 --skip_chunks 15
-python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 50 MH periodic --chunk_size 10000000 --skip_chunks 15
-
-
-# DGRN CPU + NEIGHBOUR SAMPLING
-python main.py --dataset beauty train --train_style dgsr_softmax --accelerator cpu --val_epochs 1 DGSR --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 neighbour
-python main.py --dataset beauty train --train_style dgsr_softmax --accelerator gpu --devices 1 --val_epochs 1 DGSR --user_max 50 --item_max 50 --embedding_size 50 --num_DGRN_layers=2 neighbour
-python main.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --train_style dgsr_softmax --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 --loss_fn ce neighbour
-
-
-# DEBUG
-python main_datadebug.py --dataset beauty train --accelerator cpu --val_epochs 1 DGSR --train_style dgsr_softmax --user_max 10 --item_max 10 --embedding_size 64 --num_DGRN_layers=2 --loss_fn ce neighbour
-
-
-# NEW SOTA
-# cpu debug:
-python main.py --dataset beauty train --nologger --accelerator cpu --val_epochs 1 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 64 --num_DGRN_layers=1 --loss_fn ce neighbour --n_max_trans 20 --m_order 1 --num_user 100
-
-# gpu beast mode:
-# m=1
-python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 50 --batch_size 16 DGSR --train_style dgsr_softmax --embedding_size 16 --num_DGRN_layers=1 --loss_fn ce neighbour --n_max_trans 10 --m_order 1 --num_user 10000
-
-# m=2
-python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 25 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 16 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 10 --m_order 2 --num_user 10000
-
-# beast mode
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 50 --batch_size 10 --batch_accum 5 --num_loader_workers 8 DGSR --train_style dgsr_softmax --embedding_size 25 --num_DGRN_layers=2 --val_extra_n_vals 1 --shortterm --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
-
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 2 neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_users 70
-
-# new week
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 10 --batch_accum 5 --num_loader_workers 8 DGSR --embedding_size 33 --shortterm --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr none --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr positional --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr continuous --edge_attr continuous --num_siren_layers 1 --dim_hidden_size 50 --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 
 
 
@@ -94,9 +60,18 @@ class DGSR(RecommendationModule):
         self.num_DGRN_layers = self.params.num_DGRN_layers
 
         """ layers """
-        # embedding
+        # vocab embedding
         self.user_embedding = nn.Embedding(self.user_vocab_num, self.hidden_size)
         self.item_embedding = nn.Embedding(self.item_vocab_num, self.hidden_size)
+
+        self.edge_attr = self.params.edge_attr
+        # edge embedding
+        if self.edge_attr == 'positional':
+            self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
+            self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
+        elif self.edge_attr == 'continuous':
+            self.ctUser = ContinuousTimeEmbedder(for_users=True, params=self.params)
+            self.ctItem = ContinuousTimeEmbedder(for_users=False, params=self.params)
 
         # node updating
         self.shortterm = self.params.shortterm
@@ -106,7 +81,6 @@ class DGSR(RecommendationModule):
         else:
             logger.info("[DGSR] using no Shortterm messages")
 
-        self.edge_attr = self.params.edge_attr
 
         # propogation
         self.DGSRLayers = nn.ModuleList()
@@ -145,8 +119,21 @@ class DGSR(RecommendationModule):
         edges = torch.sparse_coo_tensor(edge_index, values=torch.ones(edge_index.shape[1], device=edge_index.device), size=(len(hu), len(hi)), dtype=torch.float).coalesce()
         user_per_trans, item_per_trans = edges.indices()
 
-        rui = relative_order(oui, user_per_trans, n=self.user_max)
-        riu = relative_order(oiu, item_per_trans, n=self.item_max)
+        # make edge embeddings
+        if self.edge_attr == 'positional':
+            rui = relative_order(oui, user_per_trans, n=self.user_max)
+            riu = relative_order(oiu, item_per_trans, n=self.item_max)
+
+            pVui = self.pV(rui)
+            pKiu = self.pK(riu)
+
+        elif self.edge_attr == 'continuous':
+            pVui = self.ctUser(batch)
+            pKiu = self.ctItem(batch)
+
+        else:
+            pVui = None
+            pKiu = None
 
         # propagation
 
@@ -154,7 +141,7 @@ class DGSR(RecommendationModule):
         hu_list = [hu]
         hi_list = [hi]
         for DGSR in self.DGSRLayers:
-            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph, last_user, last_item, batch)
+            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, pVui, pKiu, self.graph, last_user, last_item)
 
             # concatenate information
             if self.shortterm:
