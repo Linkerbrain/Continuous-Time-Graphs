@@ -11,7 +11,7 @@ from siren_pytorch import SirenNet
 from siren_pytorch import Sine
 
 
-class Ct(nn.Module):
+class ContinuousTimeEmbedder(nn.Module):
     @staticmethod
     def add_args(parser):
         # layer settings
@@ -19,31 +19,30 @@ class Ct(nn.Module):
         parser.add_argument('--dim_hidden_size', type=int, default=256)
         parser.add_argument('--w0_init', type=int, default=30)
 
-    def __init__(self,user_or_item, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.num_siren_layers = self.params.num_siren_layers
-        self.input_size = self.params.input_size
-        self.embedding_size = self.params.embedding_size
-        self.w0_init = self.params.w0_init
-        self.dim_hidden_size = self.params.dim_hidden_size
+    def __init__(self, for_users, params):
+        super().__init__()
+        self.num_siren_layers = params.num_siren_layers
+        self.embedding_size = params.embedding_size
+        self.w0_init = params.w0_init
+        self.dim_hidden_size = params.dim_hidden_size
 
         # enable True for user and False for item
-        self.user_or_item = user_or_item
+        self.for_users = for_users
 
         self.net = SirenNet(
-            dim_in=self.input_size,  # input dimension
-            dim_hidden=self.params.dim_hidden_size,  # hidden dimension
-            dim_out=self.input_size * self.embedding_size,  # output dimension
+            dim_in=1,  # input dimension
+            dim_hidden=params.dim_hidden_size,  # hidden dimension
+            dim_out=self.embedding_size,  # output dimension
             num_layers=self.num_siren_layers,  # number of layers
-            final_activation=nn.Sigmoid(),  # activation of final layer (nn.Identity() for direct output)
+            final_activation=nn.Identity(),  # activation of final layer (nn.Identity() for direct output)
             w0_initial=self.w0_init
             # different signals may require different omega_0 in the first layer - this is a hyperparameter
         )
 
 
-    def forward(self, batch, edges):
+    def forward(self, batch):
         # initialize user or items
-        if self.user_or_item:
+        if self.for_users:
             code = 'u'
             index = 0
         else:
@@ -52,6 +51,6 @@ class Ct(nn.Module):
 
         # calculate difference of t
         max_t = batch[code].t_max[batch[('u', 'b', 'i')].edge_index[index]]
-        t_diff = max_t - batch[code].t
-        output = self.net(t_diff)
+        t_diff = max_t - batch['u', 'b', 'i'].t
+        output = self.net(t_diff.reshape((-1, 1)))
         return output

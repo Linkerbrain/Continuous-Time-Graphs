@@ -4,6 +4,8 @@ from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroConv, SAGEConv, GCNConv, GATConv, GATv2Conv, SGConv, LGConv
 
 from ctgraph import graphs
+from ctgraph.models.recommendation import continuous_embedding
+from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmbedder
 from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
 
@@ -27,10 +29,11 @@ class CTGR(RecommendationModule):
         assert not (self.params.split_conv and self.params.homogenous)
 
         if self.params.convolution == 'SAGE':
-            convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size)
+            # I believe root_weight is equivalent to add self loops in other convs?
+            convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size ,root_weight=self.params.add_self_loops)
         elif self.params.convolution == 'GCN':
             assert self.params.homogenous or self.params.split_conv
-            convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size)
+            convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size, add_self_loops=self.params.add_self_loops)
         elif self.params.convolution == 'GAT':
             edge_dim = self.params.embedding_size if self.params.edge_attr != 'none' else None
             convolution = lambda: GATConv(self.params.embedding_size, self.params.embedding_size, edge_dim=edge_dim,
@@ -45,9 +48,10 @@ class CTGR(RecommendationModule):
             assert self.params.homogenous
             # SGConv does all the convolutions at once (parameter K)
             convolution = lambda: SGConv(self.params.embedding_size, self.params.embedding_size,
-                                         K=self.params.conv_layers)
+                                         K=self.params.conv_layers, add_self_loops=self.params.add_self_loops)
         elif self.params.convolution == 'LG':
             assert self.params.homogenous
+            assert not self.params.add_self_loops
             convolution = lambda: LGConv()
         else:
             raise NotImplementedError()
@@ -84,11 +88,17 @@ class CTGR(RecommendationModule):
                                                           self.params.embedding_size)  # user positional embedding
             self.positional_item_embedding = nn.Embedding(self.params.n_max_trans,
                                                           self.params.embedding_size)  # item positional embedding
+        elif self.params.edge_attr == 'continuous':
+            self.continuous_user_embedding = ContinuousTimeEmbedder(True, self.params)
+            self.continuous_item_embedding = ContinuousTimeEmbedder(True, self.params)
 
         if self.params.activation == 'none':
             self.activation = lambda x: x
         else:
             self.activation = eval(f"torch.{self.params.activation}")
+
+        if self.params.concat_previous:
+            self.combine_transform = nn.Linear(self.params.embedding_size * 2, self.params.embedding_size)
 
         self.dropout = nn.Dropout(self.params.dropout)
 
@@ -106,6 +116,8 @@ class CTGR(RecommendationModule):
         parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'continuous'])
         parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
         parser.add_argument('--add_self_loops', action='store_true', help='For the attention convolutions')
+        parser.add_argument('--concat_previous', action='store_true')
+        continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
         assert predict_i is None or predict_i_ptr is not None
@@ -217,10 +229,9 @@ class CTGR(RecommendationModule):
                 ('i', 'rev_b', 'u'): self.positional_user_embedding(rui)
             }
         elif self.params.edge_attr == 'continuous':
-            import pdb; pdb.set_trace()
             edge_attr_dict = {
-                ('u', 'b', 'i'): self.positional_item_embedding(riu),
-                ('i', 'rev_b', 'u'): self.positional_user_embedding(rui)
+                ('u', 'b', 'i'): self.continuous_item_embedding(graph),
+                ('i', 'rev_b', 'u'): self.continuous_user_embedding(graph)
             }
 
 
@@ -232,9 +243,15 @@ class CTGR(RecommendationModule):
                 # Note that GAT and GATv2 actually also put the edge attributes through a weight matrix,
                 # this is unnecessary computation since the embeddings themselves are learnable too but
                 # otherwise I don't think it matters
-                x_dict = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
+                x_dict_new = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
             else:
-                x_dict = conv(x_dict, edge_index_dict)
+                x_dict_new = conv(x_dict, edge_index_dict)
+
+            if self.params.concat_previous:
+                x_dict = {key: self.combine_transform(torch.cat((x, x_dict[key]), dim=1)) for key, x in x_dict_new.items()}
+            else:
+                x_dict = x_dict_new
+
             x_dict = {key: self.activation(x) for key, x in x_dict.items()}
             if i != len(self.convs) - 1:
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}

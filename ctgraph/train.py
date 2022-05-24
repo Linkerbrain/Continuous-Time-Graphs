@@ -189,7 +189,6 @@ def load_best_model(neptune_logger, model):
 
 
 def main(params):
-    xx
     # Set all the seeds
     random.seed(params.seed)
     np.random.seed(params.seed)
@@ -258,6 +257,10 @@ def main(params):
         task = Task('Validating model').start()
         trainer.validate(model)
         task.done()
+
+    if not params.nologger:
+        # Wait for everything to be uploaded before we try to grab the best model
+        neptune_logger.experiment.wait()
 
     # test
     if not params.notest:
