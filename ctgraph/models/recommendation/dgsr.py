@@ -47,7 +47,14 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs
 python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 25 --batch_size 4 DGSR --train_style dgsr_softmax --embedding_size 16 --num_DGRN_layers=2 --loss_fn ce neighbour --n_max_trans 10 --m_order 2 --num_user 10000
 
 # beast mode
-python main.py --dataset beauty train --accelerator gpu --devices 1 --val_epochs 5 --epochs 50 --batch_size 100 --num_loader_workers 24 --batch_accum 1 DGSR --train_style dgsr_softmax --embedding_size 50 --num_DGRN_layers=2 --val_extra_n_vals 1 --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_user 500
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 50 --batch_size 10 --batch_accum 5 --num_loader_workers 8 DGSR --train_style dgsr_softmax --embedding_size 25 --num_DGRN_layers=2 --val_extra_n_vals 1 --shortterm --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 2 neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_users 70
+
+# new week
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 10 --batch_accum 5 --num_loader_workers 8 DGSR --embedding_size 33 --shortterm --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+
+
 
 """
 
@@ -58,7 +65,7 @@ class DGSR(RecommendationModule):
         parser.add_argument('--embedding_size', type=int, default=64)
         parser.add_argument('--num_DGRN_layers', type=int, default=2)
 
-        parser.add_argument('--shortterm', type=bool, default=False)
+        parser.add_argument('--shortterm', action='store_true')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -136,7 +143,7 @@ class DGSR(RecommendationModule):
         rui = relative_order(oui, user_per_trans, n=self.user_max)
         riu = relative_order(oiu, item_per_trans, n=self.item_max)
 
-        # propogation
+        # propagation
 
         # iterate over Dynamic Graph Sequential Recommendation Layers
         hu_list = [hu]
