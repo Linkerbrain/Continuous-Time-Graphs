@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn
 
 from ctgraph.models.recommendation.module import RecommendationModule
+from ctgraph.models.recommendation import continuous_embedding
 
 from .dgsr_utils import relative_order
 from .dgsr_layer import DGSRLayer
@@ -66,7 +67,10 @@ class DGSR(RecommendationModule):
         parser.add_argument('--num_DGRN_layers', type=int, default=2)
 
         parser.add_argument('--shortterm', action='store_true')
+        parser.add_argument('--edge_attr', type=str, default='none', choices=['none', 'positional', 'continuous'])
 
+        continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
+        
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -78,7 +82,6 @@ class DGSR(RecommendationModule):
         self.user_vocab_num = self.graph['u'].code.shape[0]
         self.item_vocab_num = self.graph['i'].code.shape[0]
 
-        # Max number of neighbours used in sampling TODO
         if self.params.n_max_trans is None:
             raise ValueError("n (max_transactions) should be set in the dataset settings so the DGSR model can use it too")
 
@@ -103,10 +106,12 @@ class DGSR(RecommendationModule):
         else:
             logger.info("[DGSR] using no Shortterm messages")
 
+        self.edge_attr = self.params.edge_attr
+
         # propogation
         self.DGSRLayers = nn.ModuleList()
         for _ in range(self.num_DGRN_layers):
-            self.DGSRLayers.append(DGSRLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max, self.shortterm))
+            self.DGSRLayers.append(DGSRLayer(self.user_vocab_num, self.item_vocab_num, self.hidden_size, self.user_max, self.item_max, self.shortterm, self.edge_attr, self.params))
 
 
         num_concats = 3 if self.shortterm else 2
@@ -149,7 +154,7 @@ class DGSR(RecommendationModule):
         hu_list = [hu]
         hi_list = [hi]
         for DGSR in self.DGSRLayers:
-            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph, last_user, last_item)
+            hLu, hSu, hLi, hSi = DGSR(hu, hi, edges, rui, riu, self.graph, last_user, last_item, batch)
 
             # concatenate information
             if self.shortterm:

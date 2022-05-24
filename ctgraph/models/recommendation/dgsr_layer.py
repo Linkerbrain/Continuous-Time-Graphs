@@ -4,15 +4,24 @@ import numpy as np
 
 from .dgsr_utils import sparse_dense_mul, pass_messages, relative_order, get_last
 
+from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmbedder
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
     def __init__(self,
                  user_num, item_num,
                  hidden_size,
                  user_max, item_max,
-                 shortterm
+                 shortterm,
+                 edge_attr,
+                 params
                 ):
         super().__init__()
         """ init """
+        self.params = params
+
         self.user_vocab_num = user_num
         self.item_vocab_num = item_num
 
@@ -24,6 +33,8 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         self.do_shortterm = shortterm
 
+        self.edge_attr = edge_attr
+
         """ layers """
         self.w1 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Attention Item
         self.w2 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Long Term Attention User
@@ -34,10 +45,14 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         self.w3 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term Item
         self.w4 = nn.Linear(self.hidden_size, self.hidden_size, bias=False) # Short Term User
 
-        self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
-        self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
+        if self.edge_attr == 'positional':
+            self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
+            self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
+        elif self.edge_attr == 'continuous':
+            self.ctUser = ContinuousTimeEmbedder(for_users=True, params=self.params)
+            self.ctItem = ContinuousTimeEmbedder(for_users=False, params=self.params)
 
-    def longterm(self, u_embedded, i_embedded, edge_index, rui, riu):
+    def longterm(self, u_embedded, i_embedded, edge_index, rui, riu, batch):
         # --- long term ---
 
         user_messages_for_attention = self.w2(u_embedded) # (u, h)
@@ -52,26 +67,51 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         # - users to items -
 
         # compute positional embeddings
-        pVui = self.pV(rui)
+        if self.edge_attr == 'positional':
+            pVui = self.pV(rui)
 
-        # dot product van elke pos embedding met betreffende user
-        u_at_pVui = torch.einsum('ij, ij->i', user_messages_for_attention[user_per_trans], pVui)
+            # dot product van elke pos embedding met betreffende user
+            u_at_pVui = torch.einsum('ij, ij->i', user_messages_for_attention[user_per_trans], pVui)
+
+            e_ui_values = e._values() + u_at_pVui
+        elif self.edge_attr == 'continuous':
+            pVui = self.ctUser(batch)
+
+            # dot product van elke pos embedding met betreffende user
+            u_at_pVui = torch.einsum('ij, ij->i', user_messages_for_attention[user_per_trans], pVui)
+
+            e_ui_values = e._values() + u_at_pVui
+        else:
+            pVui = None
+            e_ui_values = e._values()
 
         # alpha is softmax(wu @ wi.T + wu @ p)
-        e_ui = torch.sparse_coo_tensor(e._indices(), e._values() + u_at_pVui, e.size())
+        e_ui = torch.sparse_coo_tensor(e._indices(), e_ui_values, e.size())
         alphas = torch.sparse.softmax(e_ui / self.sqrt_d, dim=1) # (u, i)
 
         # - items to users -
+        
+        if self.edge_attr == 'positional':
+            pKiu = self.pK(riu)
 
-        # compute positional embeddings
-        pKiu = self.pK(riu)
+            # dot product van elke pos embedding met betreffende user
+            u_at_pKiu = torch.einsum('ij, ij->i', item_messages_for_attention[item_per_trans], pKiu)
 
-        # dot product van elke pos embedding met betreffende user
-        u_at_pKiu = torch.einsum('ij, ij->i', item_messages_for_attention[item_per_trans], pKiu)
+            e_iu_values = e._values() + u_at_pKiu
+        elif self.edge_attr == 'continuous':
+            pKiu = self.ctItem(batch)
+
+            # dot product van elke pos embedding met betreffende user
+            u_at_pKiu = torch.einsum('ij, ij->i', item_messages_for_attention[item_per_trans], pKiu)
+
+            e_iu_values = e._values() + u_at_pKiu
+        else:
+            pKiu = None
+            e_iu_values = e._values()
 
         # beta is softmax(wi @ wu.T + wi @ p)
         e_trans = torch.transpose(e, 0, 1)
-        e_iu = torch.sparse_coo_tensor(e_trans._indices(), e_trans._values() + u_at_pKiu, e_trans.size())
+        e_iu = torch.sparse_coo_tensor(e_trans._indices(), e_iu_values, e_trans.size())
         betas = torch.sparse.softmax(e_iu / self.sqrt_d, dim=1) # (u, i)
 
         # pass messages
@@ -130,10 +170,10 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
         return shortterm_hu, shortterm_hi
 
 
-    def forward(self, u_emb, i_emb, edge_index, rui, riu, graph, last_u, last_i):
+    def forward(self, u_emb, i_emb, edge_index, rui, riu, graph, last_u, last_i, batch):
         # propagate information
         # longterm
-        hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu)
+        hLu, hLi = self.longterm(u_emb, i_emb, edge_index, rui, riu, batch)
 
         if self.do_shortterm:
             hSu, hSi = self.shortterm(u_emb, i_emb, edge_index, graph, last_u, last_i)
