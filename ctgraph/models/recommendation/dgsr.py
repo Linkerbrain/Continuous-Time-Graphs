@@ -52,7 +52,7 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_sa
 python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 2 neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_users 70
 
 # new week
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 12 DGSR --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 13 --batch_accum 4 --num_loader_workers 8 DGSR --embedding_size 33 --shortterm --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 
 
 
