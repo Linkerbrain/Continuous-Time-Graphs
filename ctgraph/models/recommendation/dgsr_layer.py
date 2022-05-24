@@ -36,9 +36,6 @@ class DGSRLayer(nn.Module): # Dynamic Graph Recommendation Network
 
         self.pV = nn.Embedding(self.user_max, self.hidden_size) # user positional embedding
         self.pK = nn.Embedding(self.item_max, self.hidden_size) # item positional embedding
-    
-        self.last_user_embedding = nn.Embedding(self.user_vocab_num, self.hidden_size) # last user embedding
-        self.last_item_embedding = nn.Embedding(self.item_vocab_num, self.hidden_size) # last item embedding
 
     def longterm(self, u_embedded, i_embedded, edge_index, rui, riu):
         # --- long term ---
