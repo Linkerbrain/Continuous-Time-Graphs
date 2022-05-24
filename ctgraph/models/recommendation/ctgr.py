@@ -90,7 +90,7 @@ class CTGR(RecommendationModule):
                                                           self.params.embedding_size)  # item positional embedding
         elif self.params.edge_attr == 'continuous':
             self.continuous_user_embedding = ContinuousTimeEmbedder(True, self.params)
-            self.continuous_item_embedding = ContinuousTimeEmbedder(True, self.params)
+            self.continuous_item_embedding = ContinuousTimeEmbedder(False, self.params)
 
         if self.params.activation == 'none':
             self.activation = lambda x: x

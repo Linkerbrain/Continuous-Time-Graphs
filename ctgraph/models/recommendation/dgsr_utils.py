@@ -32,10 +32,9 @@ def pass_messages(messages, adjacency, pVui):
     # add messages
     output.index_add_(0, user_per_trans, messages[item_per_trans] * alpha)
 
-    # add embeddings
-    output.index_add_(0, user_per_trans, pVui * alpha)
-
-    # TODO: also scale by edge weight ?
+    if pVui != None:
+        # add embeddings
+        output.index_add_(0, user_per_trans, pVui * alpha)
 
     return output
 
