@@ -19,7 +19,7 @@ class ContinuousTimeEmbedder(nn.Module):
         parser.add_argument('--dim_hidden_size', type=int, default=256)
         parser.add_argument('--w0_init', type=int, default=30)
 
-    def __init__(self, for_users, params):
+    def __init__(self, for_users, params, mode='t_max'):
         super().__init__()
         self.num_siren_layers = params.num_siren_layers
         self.embedding_size = params.embedding_size
@@ -28,6 +28,7 @@ class ContinuousTimeEmbedder(nn.Module):
 
         # enable True for user and False for item
         self.for_users = for_users
+        self.mode = mode
 
         self.net = SirenNet(
             dim_in=1,  # input dimension
@@ -49,8 +50,19 @@ class ContinuousTimeEmbedder(nn.Module):
             code = 'i'
             index = 1
 
-        # calculate difference of t
-        max_t = batch[code].t_max[batch[('u', 'b', 'i')].edge_index[index]]
-        t_diff = max_t - batch['u', 'b', 'i'].t
-        output = self.net(t_diff.reshape((-1, 1)))
+        if self.mode == 't_min':
+            # calculate difference of t
+            max_t = batch[code].t_max[batch[('u', 'b', 'i')].edge_index[index]]
+            t_diff = max_t - batch['u', 'b', 'i'].t
+            output = self.net(t_diff.reshape((-1, 1)))
+        elif self.mode == 't_max':
+            # calculate difference of t
+            min_t = batch[code].t_min[batch[('u', 'b', 'i')].edge_index[index]]
+            t_diff = min_t - batch['u', 'b', 'i'].t
+            output = self.net(t_diff.reshape((-1, 1)))
+        elif self.mode == 'absolute':
+            output = self.net(batch['u', 'b', 'i'].t)
+        else:
+            raise NotImplementedError
+
         return output

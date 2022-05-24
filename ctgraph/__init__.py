@@ -4,7 +4,6 @@ import logging
 # Make logger
 logger = logging.getLogger(__name__)
 
-
 # STEP 2
 # specifies the lowest severity for logging
 logger.setLevel(logging.INFO)
@@ -21,6 +20,7 @@ console_handler.setFormatter(logging.Formatter(log_format))
 
 # finally, we add the handler to the logger
 logger.addHandler(console_handler)
+
 
 class Task(object):
     def __init__(self, name):
@@ -50,5 +50,7 @@ def task(name):
             result = function(*args, **kwargs)
             t.done()
             return result
+
         return wrapper
+
     return decorator

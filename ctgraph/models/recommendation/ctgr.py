@@ -89,8 +89,8 @@ class CTGR(RecommendationModule):
             self.positional_item_embedding = nn.Embedding(self.params.n_max_trans,
                                                           self.params.embedding_size)  # item positional embedding
         elif self.params.edge_attr == 'continuous':
-            self.continuous_user_embedding = ContinuousTimeEmbedder(True, self.params)
-            self.continuous_item_embedding = ContinuousTimeEmbedder(True, self.params)
+            self.continuous_user_embedding = ContinuousTimeEmbedder(True, self.params, mode=self.params.siren_mode)
+            self.continuous_item_embedding = ContinuousTimeEmbedder(False, self.params, mode=self.params.siren_mode)
 
         if self.params.activation == 'none':
             self.activation = lambda x: x
@@ -117,6 +117,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--layered_embedding', type=str, default='cat', choices=['cat', 'mean'])
         parser.add_argument('--add_self_loops', action='store_true', help='For the attention convolutions')
         parser.add_argument('--concat_previous', action='store_true')
+        parser.add_argument('--siren_mode', type=str, default='t_max', choices=['t_min', 't_max', 'absolute'])
         continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
