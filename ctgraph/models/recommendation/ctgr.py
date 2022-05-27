@@ -28,6 +28,7 @@ class CTGR(RecommendationModule):
 
         assert not (self.params.split_conv and self.params.homogenous)
 
+        # -- Convolution --
         if self.params.convolution == 'SAGE':
             # I believe root_weight is equivalent to add self loops in other convs?
             convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size,
@@ -58,6 +59,7 @@ class CTGR(RecommendationModule):
         else:
             raise NotImplementedError()
 
+        # -- stack layers --
         # current_size = input_size
         current_size = 0
         for i in range(self.params.conv_layers if self.params.convolution != 'SG' else 1):
@@ -72,17 +74,31 @@ class CTGR(RecommendationModule):
                 self.convs.add_module(f"conv_{i}", convolution())
                 self.convs2.add_module(f"conv2_{i}", convolution())
 
+        # -- fancy prediction --
         if self.params.pit:
-            concat_length = self.params.embedding_size * (
-                    self.params.conv_layers + 4)  # + initial + item + u_t_max + i_t_max
             layered_embeddings_length = self.params.embedding_size * (self.params.conv_layers + 1)
+            
             self.predict_W_u = nn.Linear(layered_embeddings_length, self.params.embedding_size, bias=False)
             self.predict_W_i = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_W_tu = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_W_ti = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_a = nn.Linear(self.params.embedding_size, 1, bias=False)
 
-        if self.params.layered_embedding == 'cat':
+        # -- fancy prwediction --
+        if self.params.pwit: 
+            in_size = 1
+            out_size = hidden_size*hidden_size
+
+            kernel_hidden_size = 50
+            omega_0 = 30
+            bias = True
+
+            dropout = 0.3
+
+            self.transform_kernel_creator = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout)
+
+        # -- normal prediction --
+        elif self.params.layered_embedding == 'cat':
             if self.params.convolution == 'SG':
                 # SGConv doesn't store intermediary convolutions so we just have the initial and the final onea
                 self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * 2)
@@ -95,6 +111,7 @@ class CTGR(RecommendationModule):
         else:
             raise NotImplementedError()
 
+        # -- embeddings --
         if self.params.edge_attr == 'positional':
             self.positional_user_embedding = nn.Embedding(self.params.n_max_trans,
                                                           self.params.embedding_size)  # user positional embedding
@@ -112,6 +129,7 @@ class CTGR(RecommendationModule):
         if self.params.concat_previous:
             self.combine_transform = nn.Linear(self.params.embedding_size * 2, self.params.embedding_size)
 
+        # -- dropout --
         self.dropout = nn.Dropout(self.params.dropout)
 
     @staticmethod
@@ -200,6 +218,26 @@ class CTGR(RecommendationModule):
 
                 # s_ui = h_u.T W_1 e_i + pt_u W_2 e_i + pt_i W_3 e_i
                 predictions = item_scores + tu_score + ti_score
+
+
+
+        # time dependent weights prediction `s = u W(t) e_i`
+        elif self.params.pwit:
+            # Get t
+            t = graph['target'].t
+
+            # Make kernel
+            kernel_shape = (layered_embeddings_u.shape[-1], embeddings_i.shape[-1], t.shape[0])
+            transform = self.transform_kernel_creator(t.unsqueese(-1)).view(kernel_shape)
+
+            if predict_i is not None:
+                predictions = torch.sum(layered_embeddings_u * transform @ embeddings_i, dim=1)
+            else:
+                # Do every user for every item, resulting in a u x i matrix instead
+                predictions = layered_embeddings_u @ transform @ embeddings_i
+
+
+
 
         elif predict_i is not None:
             predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
