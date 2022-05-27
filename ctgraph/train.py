@@ -1,5 +1,7 @@
+import getpass
 import logging
 import random
+import sys
 
 import numpy as np
 import torch
@@ -173,6 +175,8 @@ def make_logger(params):
         for k, v in vars(params).items():
             neptune.experiment[f'global/params/{k}'] = str(v)
         neptune.experiment[f'global/info'] = params.info
+        neptune.experiment[f'global/command'] = ' '.join(sys.argv)
+        neptune.experiment[f'global/username'] = getpass.getuser()
     else:
         neptune = None
         if params.load_checkpoint is not None:

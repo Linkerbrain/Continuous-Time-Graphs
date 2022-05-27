@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=TRAINBASELINESFAITH
+#SBATCH --job-name=TRAINDGSR
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
 #SBATCH --gres=gpu:1

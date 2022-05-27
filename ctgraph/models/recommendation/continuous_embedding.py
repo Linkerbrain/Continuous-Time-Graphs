@@ -61,7 +61,7 @@ class ContinuousTimeEmbedder(nn.Module):
             t_diff = min_t - batch['u', 'b', 'i'].t
             output = self.net(t_diff.reshape((-1, 1)))
         elif self.mode == 'absolute':
-            output = self.net(batch['u', 'b', 'i'].t)
+            output = self.net(batch['u', 'b', 'i'].t.reshape((-1,1)))
         else:
             raise NotImplementedError
 
