@@ -154,9 +154,10 @@ class CTGR(RecommendationModule):
         else:
             embeddings_i = self.item_embedding.weight
 
+        # time dependent prediction
         if self.params.pit:
-            u_transformed = self.predict_W_u(layered_embeddings_u) # already is only the ones in predict_u
-            i_transformed = self.predict_W_i(embeddings_i)
+
+            # Get t
             # TODO: Reorganice for performace: Call siren(t) first then index with predict_u
             if self.params.pit_target:
                 if predict_i is not None:
@@ -168,21 +169,37 @@ class CTGR(RecommendationModule):
                     assert t.shape == graph['eval'].u_index.shape
                 else:
                     t = graph['target'].t
+
             t = graph['u'].t_max[predict_u] if not self.params.pit_target else t
-            t_u_transformed = self.predict_W_tu(self.continuous_user_embedding.net(t.reshape((-1,1))))
-            t_i_transformed = self.predict_W_ti(self.continuous_item_embedding.net(t.reshape((-1,1))))
-            u_aggr = u_transformed + t_u_transformed + t_i_transformed
-            i_aggr = i_transformed
-            # if predict_i is None:
-            #     cartesian = u_aggr[:, None, :] + i_aggr[None, :, :]
-            # else:
-            #     cartesian = u_aggr + i_aggr
-            # predictions = self.predict_a(cartesian)
-            # predictions = predictions.squeeze(-1)
+
+            # embed ts
+            pt_u = self.continuous_user_embedding.net(t.reshape((-1,1)))
+            pt_i = self.continuous_item_embedding.net(t.reshape((-1,1)))
+
+            # predict (if statement could be removed later)
             if predict_i is not None:
-                predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1) + torch.sum(t_u_transformed * self.predict_W_tu(embeddings_i), dim=1) + torch.sum(t_i_transformed * self.predict_W_ti(embeddings_i), dim=1)
+                # h_u.T W_1 e_i
+                item_score = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
+                # pt_u W_2 e_i
+                tu_score = torch.sum(pt_u * self.predict_W_tu(embeddings_i), dim=1)
+                # pt_i W_3 e_i
+                ti_score = torch.sum(pt_i * self.predict_W_ti(embeddings_i), dim=1)
+
+                # s_ui = h_u.T W_1 e_i + pt_u W_2 e_i + pt_i W_3 e_i
+                predictions = item_score + tu_score + ti_score
+
             else:
-                predictions = layered_embeddings_u @ self.transform(embeddings_i).T + t_u_transformed @ self.predict_W_tu(embeddings_i).T + t_u_transformed @ self.predict_W_ti(embeddings_i).T
+                # h_u.T W_1 e_i
+                item_scores = layered_embeddings_u @ self.transform(embeddings_i).T
+
+                # pt_u W_2 e_i
+                tu_score = pt_u @ self.predict_W_tu(embeddings_i).T 
+
+                # pt_i W_3 e_i
+                ti_score = pt_i @ self.predict_W_ti(embeddings_i).T
+
+                # s_ui = h_u.T W_1 e_i + pt_u W_2 e_i + pt_i W_3 e_i
+                predictions = item_scores + tu_score + ti_score
 
         elif predict_i is not None:
             predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
