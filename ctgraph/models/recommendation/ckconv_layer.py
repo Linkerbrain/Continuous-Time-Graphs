@@ -35,8 +35,8 @@ class CKConv(nn.Module): # Continuous Kernel Convolution
 
     def forward(self, u_embedded, i_embedded, user_per_trans, item_per_trans, edges_t, u_t, i_t):
         # make times relative
-        relative_u = u_t[user_per_trans] - edges_t
-        relative_i = i_t[item_per_trans] - edges_t
+        relative_i = u_t[user_per_trans] - edges_t
+        relative_u = i_t[item_per_trans] - edges_t
 
         # get kernels
         user_kernels = self.w_users(relative_u.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
