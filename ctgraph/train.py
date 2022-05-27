@@ -48,6 +48,11 @@ def add_args(parser):
     parser.add_argument('--nologger', action='store_true')
     parser.add_argument('--notest', action='store_true')
     parser.add_argument('--noshuffle', action='store_true')
+
+    parser.add_argument('--save_embed', type=str, default=None)
+    parser.add_argument('--load_embed', type=str, default=None)
+    parser.add_argument('--freeze_embed', action='store_true')
+
     parser.add_argument('--dontloadfromdisk', action='store_true')
     parser.add_argument('--dontsave', action='store_true')
     parser.add_argument('--partial_save', action='store_true')
@@ -191,6 +196,20 @@ def load_best_model(neptune_logger, model):
     model.load_state_dict(checkpoint['state_dict'])
     logger.info(f"Loaded best model '{checkpoint_path}'")
 
+# saves embedding layer (can be done after loading in a checkpoint)
+def save_embed(model, name, location='./embeddings'):
+    torch.save(model.user_embedding, path.join(location, f'{name}_user_embedding.torch'))
+    torch.save(model.item_embedding, path.join(location, f'{name}_item_embedding.torch'))
+
+# loads an embedding layer
+def load_embed(model, name, location='./embeddings'):
+    model.user_embedding = torch.load(path.join(location, f'{name}_user_embedding.torch'))
+    model.item_embedding = torch.load(path.join(location, f'{name}_item_embedding.torch'))
+
+# turns off the gradient on the embedding layers
+def freeze_embed(model):
+    model.user_embedding.weight.requires_grad = False
+    model.item_embedding.weight.requires_grad = False
 
 def main(params):
     # Set all the seeds
@@ -235,6 +254,17 @@ def main(params):
         load_best_model(neptune_logger, model)
     else:
         neptune_logger.log_model_summary(model=model, max_depth=-1)
+
+    # save desired attributes if you want
+    if params.save_embed is not None:
+        save_embed(model, name=params.save_embed)
+
+    # modify model
+    if params.load_embed is not None:
+        load_embed(model, name=params.load_embed)
+
+    if params.freeze_embed:
+        freeze_embed(model)
 
     # make trainer
     checkpoint_callback = pl.callbacks.ModelCheckpoint(save_top_k=2, save_last=True, monitor=params.monitor, mode='max')

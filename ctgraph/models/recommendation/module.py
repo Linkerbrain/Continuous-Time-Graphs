@@ -273,6 +273,6 @@ class RecommendationModule(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.params.lr, weight_decay=self.params.decay,
+        optimizer = torch.optim.Adam([ param for param in self.parameters() if param.requires_grad], lr=self.params.lr, weight_decay=self.params.decay,
                                      amsgrad=self.params.amsgrad)
         return optimizer

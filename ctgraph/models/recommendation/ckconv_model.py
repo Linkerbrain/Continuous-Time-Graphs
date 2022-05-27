@@ -10,7 +10,7 @@ from ctgraph.models.recommendation.sumconv import SumConv
 from ctgraph.models.recommendation.ckconv_layer import CKConv
 
 """
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 20 --batch_accum 3 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 3 neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 10 --batch_size 20 --batch_accum 3 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 3 neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 
 """
 

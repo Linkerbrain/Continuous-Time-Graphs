@@ -116,7 +116,8 @@ class KernelNet(torch.nn.Module):
             "Swish": ckconv.Swish,
             "Sine": ckconv.Sine,
         }[activation_function]
-        Linear = {1: ckconv.Linear1d, 2: ckconv.Linear2d}[dim_linear]
+        # Linear = {1: ckconv.Linear1d, 2: ckconv.Linear2d}[dim_linear]
+        Linear = torch.nn.Linear
 
         self.kernel_net = torch.nn.Sequential(
             weight_norm(Linear(in_channels, hidden_channels, bias=bias)),
