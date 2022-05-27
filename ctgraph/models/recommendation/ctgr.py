@@ -81,19 +81,19 @@ class CTGR(RecommendationModule):
             self.predict_W_tu = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_W_ti = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_a = nn.Linear(self.params.embedding_size, 1, bias=False)
-        else:
-            if self.params.layered_embedding == 'cat':
-                if self.params.convolution == 'SG':
-                    # SGConv doesn't store intermediary convolutions so we just have the initial and the final onea
-                    self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * 2)
-                else:
-                    # for the dot product at the end between the complete customer embedding and a candidate article
-                    self.transform = nn.Linear(self.params.embedding_size,
-                                               self.params.embedding_size * (self.params.conv_layers + 1))
-            elif self.params.layered_embedding == 'mean':
-                self.transform = lambda x: x
+
+        if self.params.layered_embedding == 'cat':
+            if self.params.convolution == 'SG':
+                # SGConv doesn't store intermediary convolutions so we just have the initial and the final onea
+                self.transform = nn.Linear(self.params.embedding_size, self.params.embedding_size * 2)
             else:
-                raise NotImplementedError()
+                # for the dot product at the end between the complete customer embedding and a candidate article
+                self.transform = nn.Linear(self.params.embedding_size,
+                                           self.params.embedding_size * (self.params.conv_layers + 1))
+        elif self.params.layered_embedding == 'mean':
+            self.transform = lambda x: x
+        else:
+            raise NotImplementedError()
 
         if self.params.edge_attr == 'positional':
             self.positional_user_embedding = nn.Embedding(self.params.n_max_trans,
@@ -173,12 +173,17 @@ class CTGR(RecommendationModule):
             t_i_transformed = self.predict_W_ti(self.continuous_item_embedding.net(t.reshape((-1,1))))
             u_aggr = u_transformed + t_u_transformed + t_i_transformed
             i_aggr = i_transformed
-            if predict_i is None:
-                cartesian = u_aggr[:, None, :] + i_aggr[None, :, :]
+            # if predict_i is None:
+            #     cartesian = u_aggr[:, None, :] + i_aggr[None, :, :]
+            # else:
+            #     cartesian = u_aggr + i_aggr
+            # predictions = self.predict_a(cartesian)
+            # predictions = predictions.squeeze(-1)
+            if predict_i is not None:
+                predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1) + torch.sum(t_u_transformed * self.predict_W_tu(embeddings_i), dim=1) + torch.sum(t_i_transformed * self.predict_W_ti(embeddings_i), dim=1)
             else:
-                cartesian = u_aggr + i_aggr
-            predictions = self.predict_a(cartesian)
-            predictions = predictions.squeeze(-1)
+                predictions = layered_embeddings_u @ self.transform(embeddings_i).T + t_u_transformed @ self.predict_W_tu(embeddings_i).T + t_u_transformed @ self.predict_W_ti(embeddings_i).T
+
         elif predict_i is not None:
             predictions = torch.sum(layered_embeddings_u * self.transform(embeddings_i), dim=1)
             # predictions = torch.dot(layered_embeddings_u, self.transform(embeddings_i))
