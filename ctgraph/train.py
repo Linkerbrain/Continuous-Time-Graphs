@@ -171,7 +171,7 @@ def make_logger(params):
         import neptune.new as neptune
         # Api key and proj name in env. NEPTUNE_API_TOKEN and NEPTUNE_PROJECT
         if params.load_checkpoint is None:
-            run = neptune.init(tags=["training", "graph_nn"])
+            run = neptune.init(tags=[])
             neptune = NeptuneLogger(run=run)
         else:
             run = neptune.init(run=params.load_checkpoint)

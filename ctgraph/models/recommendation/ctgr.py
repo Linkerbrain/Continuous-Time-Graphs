@@ -5,6 +5,7 @@ from torch_geometric.nn import HeteroConv, SAGEConv, GCNConv, GATConv, GATv2Conv
 
 from ctgraph import graphs
 from ctgraph.models.recommendation import continuous_embedding
+from ctgraph.models.recommendation.ckconv_kernel2 import KernelNet
 from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmbedder
 from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
@@ -87,7 +88,7 @@ class CTGR(RecommendationModule):
         # -- fancy prwediction --
         if self.params.pwit: 
             in_size = 1
-            out_size = hidden_size*hidden_size
+            out_size = self.params.embedding_size*self.params.embedding_size
 
             kernel_hidden_size = 50
             omega_0 = 30
@@ -150,6 +151,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--siren_mode', type=str, default='t_max', choices=['t_min', 't_max', 'absolute'])
         parser.add_argument('--pit', action='store_true')
         parser.add_argument('--pit_target', action='store_true')
+        parser.add_argument('--pwit', action='store_true')
         continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
@@ -227,8 +229,8 @@ class CTGR(RecommendationModule):
             t = graph['target'].t
 
             # Make kernel
-            kernel_shape = (layered_embeddings_u.shape[-1], embeddings_i.shape[-1], t.shape[0])
-            transform = self.transform_kernel_creator(t.unsqueese(-1)).view(kernel_shape)
+            kernel_shape = (t.shape[0], embeddings_i.shape[-1], embeddings_i.shape[-1])
+            transform = self.transform_kernel_creator(t.unsqueeze(-1)).view(kernel_shape)
 
             if predict_i is not None:
                 predictions = torch.sum(layered_embeddings_u * transform @ embeddings_i, dim=1)
@@ -267,9 +269,14 @@ class CTGR(RecommendationModule):
         layer_embeddings_u = [x_dict['u'][predict_u]]
         for i, conv, conv2 in zip(range(len(self.convs)), self.convs, self.convs2):
             x = torch.cat((x_dict['u'], x_dict['i']))
-            x_dict['u'] = conv(x, edge_index)[:n_users]
-            x_dict['i'] = conv2(x, edge_index)[n_users:]
-
+            x_dict_new = dict()
+            x_dict_new['u'] = conv(x, edge_index)[:n_users]
+            x_dict_new['i'] = conv2(x, edge_index)[n_users:]
+            if self.params.concat_previous:
+                x_dict = {key: self.combine_transform(torch.cat((x, x_dict[key]), dim=1)) for key, x in
+                          x_dict_new.items()}
+            else:
+                x_dict = x_dict_new
             x_dict = {key: self.activation(x) for key, x in x_dict.items()}
             if i != len(self.convs) - 1:
                 x_dict = {key: self.dropout(x) for key, x in x_dict.items()}
@@ -294,7 +301,11 @@ class CTGR(RecommendationModule):
         # TODO: Treat articles and users symmetrically: get layered embedding for both
         layer_embeddings_u = [x[predict_u]]
         for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index)
+            x_new = conv(x, edge_index)
+            if self.params.concat_previous:
+                x = self.combine_transform(torch.cat((x_new, x), dim=1))
+            else:
+                x = x_new
             x = self.activation(x)
             # Since the concatenation by to_homogenous puts
             # users in the front we don't need to translate their indices
