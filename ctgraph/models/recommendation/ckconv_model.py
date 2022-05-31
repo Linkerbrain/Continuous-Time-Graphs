@@ -21,6 +21,7 @@ class CKConvModel(RecommendationModule):
         parser.add_argument('--embedding_size', type=int, default=50)
         parser.add_argument('--num_layers', type=int, default=3)
         parser.add_argument('--sumconv', action='store_true') # Just sum the embeddings instead of ckconv as baseline
+        parser.add_argument('--td_correction', action='store_true')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,7 +47,7 @@ class CKConvModel(RecommendationModule):
             if self.sumconv:
                 self.conv_layers.append(SumConv())
             else:
-                self.conv_layers.append(CKConv(self.hidden_size))
+                self.conv_layers.append(CKConv(self.params))
 
         # propagate by concatting h || h(l-1)
         num_concats = 2

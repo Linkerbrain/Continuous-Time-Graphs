@@ -6,18 +6,21 @@ from .dgsr_utils import sparse_dense_mul, pass_messages, relative_order, get_las
 
 from .ckconv_kernel import SirenLibraryKernel, SirenCustomKernel
 from .ckconv_kernel2 import KernelNet
+from ctgraph.stats import ParameterizedDistribution as PD
 
 class CKConv(nn.Module): # Continuous Kernel Convolution
-    def __init__(self,
-                 hidden_size
-                ):
+    def __init__(self, params):
         super().__init__()
 
-        self.hidden_size = hidden_size
+        self.hidden_size = params.embedding_size
+        self.td_correction = params.td_correction
+
+        if self.td_correction:
+            self.pd = PD.load(params)
         
         # Kernel settings
         in_size = 1
-        out_size = hidden_size*hidden_size
+        out_size = params.embedding_size*params.embedding_size
 
         kernel_hidden_size = 50
         omega_0 = 30
@@ -38,18 +41,25 @@ class CKConv(nn.Module): # Continuous Kernel Convolution
         relative_i = u_t[user_per_trans] - edges_t
         relative_u = i_t[item_per_trans] - edges_t
 
+        if self.td_correction:
+            propensities = 1/self.pd.forward(edges_t)
+            propensities /= torch.sum(propensities)
+            propensities = propensities[:, None, None]
+        else:
+            propensities = 1
+
         # get kernels
         user_kernels = self.w_users(relative_u.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
         item_kernels = self.w_items(relative_i.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
 
         # propagate item messages to user embeddings
-        item_messages = (item_kernels @ i_embedded[item_per_trans].unsqueeze(-1)).squeeze()
+        item_messages = ((item_kernels * propensities) @ i_embedded[item_per_trans].unsqueeze(-1)).squeeze()
 
         hLu = torch.zeros_like(u_embedded)
         hLu.index_add_(0, user_per_trans, item_messages)
 
         # propagate user messages to item embeddings
-        user_messages = (user_kernels @ u_embedded[user_per_trans].unsqueeze(-1)).squeeze()
+        user_messages = ((user_kernels * propensities) @ u_embedded[user_per_trans].unsqueeze(-1)).squeeze()
 
         hLi = torch.zeros_like(i_embedded)
         hLi.index_add_(0, item_per_trans, user_messages)
