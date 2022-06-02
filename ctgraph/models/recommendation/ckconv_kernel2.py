@@ -8,6 +8,7 @@ from torch.nn.utils import weight_norm
 import math
 
 from . import ckconv_kernel2_utils as ckconv
+from torch_geometric.nn import GCNConv
 
 class RFNet(torch.nn.Module):
     def __init__(
@@ -148,28 +149,46 @@ class KernelNet(torch.nn.Module):
 
         if is_siren:
             # Initialization of SIRENs
-            net_layer = 1
+            net_layer = 0
             for (i, m) in enumerate(self.modules()):
                 if (
                     isinstance(m, torch.nn.Conv1d)
                     or isinstance(m, torch.nn.Conv2d)
                     or isinstance(m, torch.nn.Linear)
                 ):
+                    net_layer += 1
                     if net_layer == 1:
                         m.weight.data.uniform_(
                             -1, 1
                         )  # Normally (-1, 1) / in_dim but we only use 1D inputs.
                         # Important! Bias is not defined in original SIREN implementation!
-                        net_layer += 1
+                        
+                        # Important! Bias is not defined in original SIREN implementation
+                        if m.bias is not None:
+                            m.bias.data.uniform_(-1.0, 1.0)
+                            
+                    if net_layer == 3:
+                        wished_std = 0.1
+                        
+                        glorot_factor = wished_std * np.sqrt(1/2) / 2
+                        
+                        m.weight.data.uniform_(
+                            -glorot_factor, glorot_factor
+                        )
+                        
+                        # Important! Bias is not defined in original SIREN implementation
+                        if m.bias is not None:
+                            m.bias.data.uniform_(-glorot_factor, glorot_factor)
+                            
                     else:
                         m.weight.data.uniform_(
                             -np.sqrt(6.0 / m.weight.shape[1]) / omega_0,
                             # the in_size is dim 2 in the weights of Linear and Conv layers
                             np.sqrt(6.0 / m.weight.shape[1]) / omega_0,
                         )
-                    # Important! Bias is not defined in original SIREN implementation
-                    if m.bias is not None:
-                        m.bias.data.uniform_(-1.0, 1.0)
+                        # Important! Bias is not defined in original SIREN implementation
+                        if m.bias is not None:
+                            m.bias.data.uniform_(-1.0, 1.0)
         else:
             # Initialization of ReLUs
             net_layer = 1
