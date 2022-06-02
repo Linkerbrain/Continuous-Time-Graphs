@@ -50,10 +50,7 @@ class CKConv(nn.Module): # Continuous Kernel Convolution
 
         # get kernels
         user_kernels = self.w_users(relative_u.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
-        user_kernels /= np.sqrt(1/2) * self.hidden_size**.5
-
         item_kernels = self.w_items(relative_i.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
-        item_kernels /= np.sqrt(1/2) * self.hidden_size**.5
 
         hLu_counts = torch.zeros_like(u_embedded)
         hLu_counts.index_add_(0, user_per_trans, torch.ones_like(item_per_trans, dtype=torch.float))
