@@ -9,6 +9,13 @@ from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmb
 from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
 
+from .ckconv_kernel2 import KernelNet
+
+"""
+python main.py --info train_attention_faithfull --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 3 --partial_save CTGR --train_style dgsr_softmax --loss_fn ce --dropout 0 --convolution GATv2 --edge_attr none --pwit --pit_target --num_siren_layers 1 --dim_hidden_size 50 --conv_layers 3 --activation tanh --concat_previous neighbour --newsampler --n_max_trans 50 --m_order 1 --sample_all
+
+"""
+
 
 class CTGR(RecommendationModule):
     def __init__(self, *args, **kwargs):
@@ -87,7 +94,7 @@ class CTGR(RecommendationModule):
         # -- fancy prwediction --
         if self.params.pwit: 
             in_size = 1
-            out_size = hidden_size*hidden_size
+            out_size = self.params.embedding_size * self.params.embedding_size * (self.params.conv_layers + 1)
 
             kernel_hidden_size = 50
             omega_0 = 30
@@ -95,7 +102,8 @@ class CTGR(RecommendationModule):
 
             dropout = 0.3
 
-            self.transform_kernel_creator = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout)
+            # to cuda is hotfix
+            self.transform_kernel_creator = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout).to('cuda')
 
         # -- normal prediction --
         elif self.params.layered_embedding == 'cat':
@@ -149,6 +157,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--concat_previous', action='store_true')
         parser.add_argument('--siren_mode', type=str, default='t_max', choices=['t_min', 't_max', 'absolute'])
         parser.add_argument('--pit', action='store_true')
+        parser.add_argument('--pwit', action='store_true')
         parser.add_argument('--pit_target', action='store_true')
         continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
@@ -166,11 +175,11 @@ class CTGR(RecommendationModule):
 
         # check if predict i are indices or codes
         if predict_i is not None and predict_i_ptr:
-            embeddings_i = self.item_embedding(graph['i'].code[predict_i])
+            embeddings_i = self.item_embedding(graph['i'].code[predict_i]).to(predict_u.device)
         elif predict_i is not None:
-            embeddings_i = self.item_embedding(predict_i)
+            embeddings_i = self.item_embedding(predict_i).to(predict_u.device)
         else:
-            embeddings_i = self.item_embedding.weight
+            embeddings_i = self.item_embedding.weight.to(predict_u.device)
 
         # time dependent prediction
         if self.params.pit:
@@ -224,18 +233,23 @@ class CTGR(RecommendationModule):
         # time dependent weights prediction `s = u W(t) e_i`
         elif self.params.pwit:
             # Get t
-            t = graph['target'].t
+            t = graph['target'].t * 100
 
             # Make kernel
             kernel_shape = (layered_embeddings_u.shape[-1], embeddings_i.shape[-1], t.shape[0])
-            transform = self.transform_kernel_creator(t.unsqueese(-1)).view(kernel_shape)
+            transform = self.transform_kernel_creator(t.unsqueeze(-1)).view(kernel_shape)
 
             if predict_i is not None:
-                predictions = torch.sum(layered_embeddings_u * transform @ embeddings_i, dim=1)
-            else:
-                # Do every user for every item, resulting in a u x i matrix instead
-                predictions = layered_embeddings_u @ transform @ embeddings_i
+                # Every user with their respective item
+                num_users = transform.shape[-1]
+                num_items_per_user = embeddings_i.shape[0] // num_users
+                kernels = torch.arange(num_users).unsqueeze(-1).expand((-1, num_items_per_user)).flatten()
 
+                predictions = torch.einsum('ab,bca,ac->a', layered_embeddings_u, transform[:, :, kernels], embeddings_i)
+            else:
+                # Do every user for every item, resulting in a u x i matrix
+                # (32, 200) (200, 50, 32) (500, 50) -> (32, 50)
+                predictions = torch.einsum('ab,bca,cd->ad', layered_embeddings_u, transform, embeddings_i.T)
 
 
 
