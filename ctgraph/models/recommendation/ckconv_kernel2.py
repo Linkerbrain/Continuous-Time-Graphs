@@ -129,7 +129,7 @@ class KernelNet(torch.nn.Module):
             ckconv.Multiply(omega_0) if is_siren else torch.nn.Identity(),
             Norm(hidden_channels) if not is_siren else torch.nn.Identity(),
             ActivationFunction(),
-            weight_norm(Linear(hidden_channels, out_channels, bias=bias)),
+            Linear(hidden_channels, out_channels, bias=bias),
             torch.nn.Dropout(p=weight_dropout) if w_dp else torch.nn.Identity(),
         )
 
