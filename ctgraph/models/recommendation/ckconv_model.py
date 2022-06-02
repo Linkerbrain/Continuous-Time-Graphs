@@ -136,9 +136,6 @@ class CKConvModel(RecommendationModule):
             predict_i_embed = self.wP(self.item_embedding(predict_i))
 
         # get the dot product of each element
-        scores = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)
-
-        # convert scores to a probability if it is likely to be bought
-        predictions = torch.sigmoid(scores)
+        predictions = torch.einsum('ij, ij->i', predict_u_graph_embed, predict_i_embed)
 
         return predictions
