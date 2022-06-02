@@ -14,7 +14,8 @@ python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_sa
 
 
 FOr time density correction
-python main.py --dataset beauty --distribution expon train --accelerator cpu --devices 1 --partial_save --val_epochs 2 --epochs 10 --batch_size 20 --batch_accum 3 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 3 --td_correction neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_users 10
+python main.py --dataset beauty --distribution expon train --accelerator gpu --devices 1 --partial_save --val_epochs 2 --epochs 20 --batch_size 10 --batch_accum 5 --num_loader_workers 8 CKCONV --train_style dgsr_softmax --loss_fn ce --embedding_size 25 --num_layers 3 --td_correction neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+
 """
 
 

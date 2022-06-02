@@ -160,7 +160,6 @@ class CTGR(RecommendationModule):
         parser.add_argument('--pit', action='store_true')
         parser.add_argument('--pwit', action='store_true')
         parser.add_argument('--pit_target', action='store_true')
-        parser.add_argument('--pwit', action='store_true')
         continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
