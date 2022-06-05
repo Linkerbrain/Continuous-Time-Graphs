@@ -11,6 +11,7 @@ from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
 
 from .ckconv_kernel2 import KernelNet
+from .gatv2_ckg import GATv2CKGConv
 from .sage_ckg import SAGECKGConv
 
 """
@@ -41,7 +42,7 @@ class CTGR(RecommendationModule):
         if self.params.convolution == 'SAGE':
             # I believe root_weight is equivalent to add self loops in other convs?
             convolution = lambda: SAGEConv(self.params.embedding_size, self.params.embedding_size,
-                                           root_weight=self.params.add_self_loops, project=self.params.project)
+                                           root_weight=self.params.add_self_loops)
         elif self.params.convolution == 'GCN':
             assert self.params.homogenous or self.params.split_conv
             convolution = lambda: GCNConv(self.params.embedding_size, self.params.embedding_size,
@@ -69,6 +70,11 @@ class CTGR(RecommendationModule):
             assert self.params.ckg
             convolution = lambda: SAGECKGConv(self.params.embedding_size, self.params.embedding_size,
                                       root_weight=self.params.add_self_loops, ckg=True)
+        elif self.params.convolution == 'CKGGATv2':
+            assert self.params.ckg
+            convolution = lambda: GATv2CKGConv(self.params.embedding_size, self.params.embedding_size,
+                                            fill_value=0, heads=self.params.heads, edge_dim=1,
+                                            add_self_loops=self.params.add_self_loops)
         else:
             raise NotImplementedError()
 
@@ -153,7 +159,6 @@ class CTGR(RecommendationModule):
         parser.add_argument('--conv_layers', type=int, default=4)
         parser.add_argument('--activation', type=str, default='relu')
         parser.add_argument('--convolution', type=str, default='SAGE')
-        parser.add_argument('--project', action='store_true')
         parser.add_argument('--heads', type=int, default=1)
         parser.add_argument('--homogenous', action='store_true')
         parser.add_argument('--dropout', type=float, default=0.25)
@@ -387,7 +392,7 @@ class CTGR(RecommendationModule):
                 # otherwise I don't think it matters
                 x_dict_new = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
             elif self.params.ckg:
-                x_dict_new = conv(x_dict, edge_index_dict, edge_time_dict=edge_time_dict)
+                x_dict_new = conv(x_dict, edge_index_dict,  edge_attr_dict=edge_time_dict)
             else:
                 x_dict_new = conv(x_dict, edge_index_dict)
 

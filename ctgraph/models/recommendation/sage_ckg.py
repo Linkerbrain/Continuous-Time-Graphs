@@ -129,7 +129,7 @@ class SAGECKGConv(MessagePassing):
             self.lin_r.reset_parameters()
 
 
-    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj, edge_time: Tensor,
+    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj, edge_attr: Tensor,
                 size: Size = None) -> Tensor:
         """"""
         if isinstance(x, Tensor):
@@ -144,8 +144,8 @@ class SAGECKGConv(MessagePassing):
             # x = (self.lin(x[0]).relu(), x[1])
 
         # propagate_type: (x: OptPairTensor)
-        out = self.propagate(edge_index, x=x, size=size, t=edge_time)
-        out = self.lin_l(out)
+        out = self.propagate(edge_index, x=x, size=size, t=edge_attr)
+        # out = self.lin_l(out)
 
         x_r = x[1]
         if self.root_weight and x_r is not None:
@@ -160,8 +160,6 @@ class SAGECKGConv(MessagePassing):
     def message(self, x_j: Tensor, t: Tensor) -> Tensor:
         kernels = self.siren(t.view(-1, 1, 1)).view((len(t), self.in_channels[0], self.in_channels[0]))
         messages = (kernels @ x_j.unsqueeze(-1)).squeeze()
-        # import pdb;
-        # pdb.set_trace()
         return messages
 
     # def message_and_aggregate(self, adj_t: SparseTensor,

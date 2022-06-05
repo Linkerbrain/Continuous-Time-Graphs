@@ -52,30 +52,28 @@ class CKConv(nn.Module): # Continuous Kernel Convolution
         user_kernels = self.w_users(relative_u.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
         item_kernels = self.w_items(relative_i.view(-1, 1, 1)).view((len(edges_t), self.hidden_size, self.hidden_size))
 
-        # hLu_counts = torch.zeros_like(u_embedded)
+        # hLu_counts = torch.zeros_like(u_embedded).to(u_embedded.device)
         # hLu_counts.index_add_(0, user_per_trans, torch.ones_like(item_per_trans, dtype=torch.float))
 
-        # hLi_counts = torch.zeros_like(i_embedded)
+        # hLi_counts = torch.zeros_like(i_embedded).to(u_embedded.device)
         # hLi_counts.index_add_(0, item_per_trans, torch.ones_like(user_per_trans, dtype=torch.float))
 
         # propagate item messages to user embeddings
         item_messages = ((item_kernels * propensities) @ i_embedded[item_per_trans].unsqueeze(-1)).squeeze()
-        item_messages_normalized = item_messages #/ hLi_counts[item_per_trans].sqrt()
+        item_messages_normalized = item_messages # / hLi_counts[item_per_trans].sqrt()
 
-        hLu = torch.zeros_like(u_embedded)
+        hLu = torch.zeros_like(u_embedded).to(u_embedded.device)
         hLu.index_add_(0, user_per_trans, item_messages_normalized)
 
-        hLu_normalized = hLu #/ hLu_counts
+        hLu_normalized = hLu # / hLu_counts.sqrt()
 
         # propagate user messages to item embeddings
         user_messages = ((user_kernels * propensities) @ u_embedded[user_per_trans].unsqueeze(-1)).squeeze()
-        user_messages_normalized = user_messages #/ hLu_counts[user_per_trans].sqrt()
-
+        user_messages_normalized = user_messages # / hLu_counts[user_per_trans].sqrt()
 
         hLi = torch.zeros_like(i_embedded)
         hLi.index_add_(0, item_per_trans, user_messages_normalized)
 
-        hLi_normalized = hLi #/ hLi_counts
+        hLi_normalized = hLi # / hLi_counts.sqrt()
 
-        # import pdb; pdb.set_trace()
         return hLu_normalized, hLi_normalized
