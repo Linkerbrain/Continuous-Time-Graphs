@@ -21,7 +21,8 @@ def add_args(parser):
     parser.add_argument('--load_checkpoint', type=str)
     parser.add_argument('--testnormaltoo', action='store_true')
     parser.add_argument('--batch_size', type=int, default=20)
-    
+    parser.add_argument('--preconditions', type=str, default=None)
+
 # load in saved arguments
 @task('Loading Neptune')
 def init_neptune(checkpoint_name):
@@ -112,8 +113,19 @@ def main(newparams):
     # connect to neptune
     neptune_logger = init_neptune(newparams.load_checkpoint)
 
+    preconditions = dict()
+    for pair in newparams.preconditions.split(',') if newparams.preconditions is not None else []:
+        k, v = pair.split(':')
+        preconditions[k] = v
+
     # load params of run
     params = load_params(neptune_logger)
+
+    for k, v in params.__dict__.items():
+        if k in preconditions and str(v) != preconditions[k]:
+            logger.info("Skipped run. Preconditions unsatisfied.")
+            return locals()
+
 
     # make model
     train_dataloader_gen, val_dataloader_gen, test_dataloader_gen, model = load_run(neptune_logger, params, newparams)
