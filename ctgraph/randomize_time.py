@@ -4,12 +4,12 @@ import torch
 def randomize_time(batch):
     # randomize timesteps
     real_t = batch[('u', 'b', 'i')].t
-    fake_t = torch.rand(real_t.shape,device=real_t.device) #fake t is between 0 and 1
+    fake_t = torch.rand(real_t.shape,device=real_t.device) * (real_t.max()-real_t.min()) + real_t.min() #fake t is in same range
     batch[('u', 'b', 'i')].t = fake_t
 
     # randomize timesteps target
     real_t_target = batch['target'].t
-    fake_t_target = torch.rand(real_t_target.shape,device=real_t.device)
+    fake_t_target = torch.rand(real_t_target.shape,device=real_t.device) * (real_t.max()-real_t.min()) + real_t.min()
     batch[('target')].t = fake_t_target
 
     # randomize oui # fake oui is between 0 and ~50
