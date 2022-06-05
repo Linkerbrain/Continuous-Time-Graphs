@@ -1,6 +1,6 @@
 import argparse
 
-from ctgraph import data, logger, train, stats
+from ctgraph import data, logger, train, stats, random_test
 from ctgraph.cool_traceback import cool_traceback
 
 
@@ -24,6 +24,9 @@ def parse_params():
     parser_train = task_subparser.add_parser('train')
     train.add_args(parser_train)
 
+    parser_test = task_subparser.add_parser('random_test')
+    random_test.add_args(parser_test)
+
     # Now parse the actual params
     params = parser.parse_args()
 
@@ -39,6 +42,8 @@ def main():
         result_ = train.main(params)
     elif params.task == 'stats':
         result_ = stats.main(params)
+    elif params.task == 'random_test':
+        result_ = random_test.main(params)
     else:
         raise NotImplementedError()
 
