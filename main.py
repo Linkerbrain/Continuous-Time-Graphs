@@ -3,6 +3,8 @@ import argparse
 from ctgraph import data, logger, train, stats, random_test
 from ctgraph.cool_traceback import cool_traceback
 
+import os
+
 
 def parse_params():
     """
@@ -51,4 +53,8 @@ def main():
 
 
 if __name__ == "__main__":
-    params, result = cool_traceback(main)
+
+    if os.environ.get("NOCOOLTRACEBACK") == '1':
+        params, result = main()
+    else:
+        params, result = cool_traceback(main)

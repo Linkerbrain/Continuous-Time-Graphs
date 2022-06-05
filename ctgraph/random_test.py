@@ -123,7 +123,7 @@ def main(newparams):
         task.done()
 
 
-    # test model normal
+    # test model randomized
     model.randomize_time = True
 
     task = Task('Testing model with RANDOM TIME').start()

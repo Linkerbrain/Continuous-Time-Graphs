@@ -26,16 +26,18 @@ The commands used for the experiments in the report are in the bash scripts in t
 
 ## Testing the use of temporal information
 
-To verify if the model is utilizing the time information, or if it solely benefits from the number of parameters you can now evaluate the model with random time.
+To verify if the model is utilizing the time information, or if it solely benefits from the number of parameters you can evaluate the model with random time.
 
 To do this, simply use the command:
-python main.py random_test --load_checkpoint CTGRLOD-30
+```python main.py random_test --load_checkpoint CTGRLOD-30```
 
 where you replace CTGRLOD-30 with the name of your Neptune run
 
 This will add an additional namespace to the checkpoint called test_RANDOM with an evaluation on data with randomized time.
 
-Additional parameters include: --testnormaltoo and --batch_size
+Additional parameters include: `--testnormaltoo` and `--batch_size`
+
+To run this test for all experiments in neptune, edit `jobs/randomized_time.sh` replacing `CTGR` with the namespace you used and `188` with the number of runs you had. Then run `export NOCOOLTRACEBACK=1; bash jobs/randomized_time.sh`
 
 # Logging
 
