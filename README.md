@@ -18,9 +18,24 @@ The first time a dataset is needed, as specified by the part `neighbour --newsam
 
 # Experiments
 
+## Dataset generation
 The commands used to generate the datasets are in `generate_dgsr_dataset0.job`, `generate_dgsr_dataset1.job`, `generate_dgsr_dataset2.job`, each with a different seed (randomness applies mainly to the generation of the false candidates in the test set). It can take upwards to 20 hours to generate a single dataset.
 
+## Model training and evaluating
 The commands used for the experiments in the report are in the bash scripts in the `/jobs` folder. Most models took about 5 hours to train (see the #Resources section for more info)
+
+## Testing the use of temporal information
+
+To verify if the model is utilizing the time information, or if it solely benefits from the number of parameters you can now evaluate the model with random time.
+
+To do this, simply use the command:
+python main.py random_test --load_checkpoint CTGRLOD-30
+
+where you replace CTGRLOD-30 with the name of your Neptune run
+
+This will add an additional namespace to the checkpoint called test_RANDOM with an evaluation on data with randomized time.
+
+Additional parameters include: --testnormaltoo and --batch_size
 
 # Logging
 
