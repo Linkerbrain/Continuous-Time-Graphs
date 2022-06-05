@@ -10,6 +10,8 @@ from ctgraph.train import make_model, load_best_model, load_dataset, make_datalo
 
 import pytorch_lightning as pl
 
+from main import parse_params
+
 """ --testnormaltoo
 python main.py random_test --load_checkpoint CTGRLOD-30
 """
@@ -32,33 +34,50 @@ def init_neptune(checkpoint_name):
 def load_params(neptune_logger):
     param_dic = neptune_logger.experiment["global/params"].fetch()
 
+    params = parse_params(args=[param_dic['task'], param_dic['model'], param_dic['sampler']])
+
     # hacky way to use saved parameters
-    parser = argparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
     for k, v in param_dic.items():
+        # Bools
         if v == 'True' or v =='False':
-            parser.add_argument('--' + k, default=v=='True', type=bool)
+            # parser.add_argument('--' + k, default=v=='True', type=bool)
+            setattr(params, k, v == 'True')
             continue
+
+        # String that looks like int
         if k =='precision':
-            parser.add_argument('--' + k, default=v)
+            # parser.add_argument('--' + k, default=v)
+            setattr(params, k, v)
             continue
+
+        # Ints
         try:
             if str(int(v)) == v:
-                parser.add_argument('--' + k, default=int(v), type=int)
+                # parser.add_argument('--' + k, default=int(v), type=int)
+                setattr(params, k, int(v))
                 continue
         except:
             pass
+
+        # Floats
         try:
             if str(float(v)) == v:
-                parser.add_argument('--' + k, default=float(v), type=float)
+                # parser.add_argument('--' + k, default=float(v), type=float)
+                setattr(params, k, float(v))
                 continue
         except:
             pass
-        
+
+        # None's
         if v == 'None':
-            parser.add_argument('--' + k, default=None)
+            # parser.add_argument('--' + k, default=None)
+            setattr(params, k, None)
+        # Strings
         else:
-            parser.add_argument('--' + k, default=v)
-    params = parser.parse_args(args=[])
+            # parser.add_argument('--' + k, default=v)
+            setattr(params, k, v)
+    # params = parser.parse_args(args=[])
 
     return params
 

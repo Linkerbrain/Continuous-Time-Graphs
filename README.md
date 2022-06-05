@@ -16,6 +16,8 @@ Take care to include all the command line arguments.
 
 The first time a dataset is needed, as specified by the part `neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1 --num_users 100`, the script will run the sampling algorithm and store the generated dataset in `precomputed_data`. The next time the same dataset is needed it will reload it from there. You can delete the `precomputed_data` folder if you need to re-generate a dataset with the same configuration.
 
+We make use of a script that cleans up the output of exceptions and puts you in a debugger session whenever one happens. You can exit the debugger with `Ctrl+D` or you can disable it entirely by setting an environment variable with `export NOCOOLTRACEBACK=1`
+
 # Experiments
 
 ## Dataset generation

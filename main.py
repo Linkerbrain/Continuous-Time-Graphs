@@ -6,7 +6,7 @@ from ctgraph.cool_traceback import cool_traceback
 import os
 
 
-def parse_params():
+def parse_params(args=None):
     """
     Parse parameters
     """
@@ -30,7 +30,7 @@ def parse_params():
     random_test.add_args(parser_test)
 
     # Now parse the actual params
-    params = parser.parse_args()
+    params = parser.parse_args(args)
 
     return params
 
