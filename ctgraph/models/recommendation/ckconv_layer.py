@@ -8,6 +8,10 @@ from .ckconv_kernel import SirenLibraryKernel, SirenCustomKernel
 from .ckconv_kernel2 import KernelNet
 from ctgraph.stats import ParameterizedDistribution as PD
 
+"""
+Deprecated
+"""
+
 class CKConv(nn.Module): # Continuous Kernel Convolution
     def __init__(self, params):
         super().__init__()
@@ -27,13 +31,14 @@ class CKConv(nn.Module): # Continuous Kernel Convolution
         bias = True
 
         dropout = 0.3
+        kernel_std = 1.0
 
         # using Siren Library
         # self.w_items = SirenLibraryKernel(in_size, out_size, layer_sizes, omega_0, bias)
         # self.w_users = SirenLibraryKernel(in_size, out_size, layer_sizes, omega_0, bias)
 
-        self.w_items = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout)
-        self.w_users = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout)
+        self.w_items = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout, kernel_std)
+        self.w_users = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout, kernel_std)
 
 
     def forward(self, u_embedded, i_embedded, user_per_trans, item_per_trans, edges_t, u_t, i_t):

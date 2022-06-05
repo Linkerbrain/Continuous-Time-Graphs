@@ -359,6 +359,11 @@ class CTGR(RecommendationModule):
                                  n=self.params.n_max_trans)
             riu = relative_order(graph['u', 'b', 'i'].oiu, graph['u', 'b', 'i'].edge_index[1],
                                  n=self.params.n_max_trans)
+
+            if self.randomize_time: # if we randomize the oui the conversion to relative messes up
+                rui = graph['u', 'b', 'i'].oui
+                riu = graph['u', 'b', 'i'].oiu
+
             # u b i points to items thus updates the item embeddings and should use riu
             # i rev_b u it the other way around
             edge_attr_dict = {

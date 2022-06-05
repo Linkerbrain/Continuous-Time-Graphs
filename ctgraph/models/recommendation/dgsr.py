@@ -18,7 +18,7 @@ from ctgraph.models.recommendation.continuous_embedding import ContinuousTimeEmb
 """
 lodewijk command
 python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr none --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
-python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr positional --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
+python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 10 --batch_accum 5 --num_loader_workers 5 DGSR --edge_attr positional --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 python main.py --dataset beauty train --accelerator gpu --devices 1 --partial_save --val_epochs 1 --epochs 20 --batch_size 25 --batch_accum 2 --num_loader_workers 8 DGSR --edge_attr continuous --edge_attr continuous --num_siren_layers 1 --dim_hidden_size 50 --embedding_size 50 --num_DGRN_layers 3 --train_style dgsr_softmax --loss_fn ce neighbour --newsampler --sample_all --n_max_trans 50 --m_order 1
 
 
@@ -123,6 +123,10 @@ class DGSR(RecommendationModule):
         if self.edge_attr == 'positional':
             rui = relative_order(oui, user_per_trans, n=self.user_max)
             riu = relative_order(oiu, item_per_trans, n=self.item_max)
+
+            if self.randomize_time: # if we randomize the oui the conversion to relative messes up
+                rui = oui
+                riu = oiu
 
             pVui = self.pV(rui)
             pKiu = self.pK(riu)
