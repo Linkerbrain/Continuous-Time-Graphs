@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from torch import nn
 
 from ctgraph import evaluation, logger
+from ctgraph.randomize_time import randomize_time
 
 
 def cmp_loss(pred, label):
@@ -22,6 +23,9 @@ class RecommendationModule(pl.LightningModule):
         self.params = params
         self.train_dataloader_gen = train_dataloader_gen
         self.val_dataloader_gen = val_dataloader_gen
+
+        # evaluation setting, can be set outside
+        self.randomize_time = False
 
         if self.params.loss_fn == 'mse':
             self.loss_fn = nn.MSELoss(reduction='mean')
@@ -78,6 +82,7 @@ class RecommendationModule(pl.LightningModule):
 
             positives_mean = torch.mean(predictions[labels.bool()])
             negatives_mean = torch.mean(predictions[~labels.bool()])
+            
         elif self.params.train_style == 'dgsr_softmax':
             """
             Softmax over all items
@@ -266,6 +271,9 @@ class RecommendationModule(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx, namespace='test'):
+        if self.randomize_time:
+            namespace = 'test_RANDOM'
+            batch = randomize_time(batch)
 
         # Do standard validation as well to compute the MAP scores
         loss = self.validation_step(batch, batch_idx, namespace=namespace, extra=True)

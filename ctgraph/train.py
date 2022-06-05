@@ -67,8 +67,6 @@ def add_args(parser):
     subparse_model(model_subparser, 'CTGR', ctgraph.models.recommendation.ctgr.CTGR)
     subparse_model(model_subparser, 'DUMMY', ctgraph.models.recommendation.dummy.Dummy)
 
-    pass
-
 @task('Loading dataset')
 def load_dataset(name, params):
     logger.info(f"Loading dataset '{name}' from disk...")
