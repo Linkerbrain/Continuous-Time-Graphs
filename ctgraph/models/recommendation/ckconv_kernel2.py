@@ -84,6 +84,7 @@ class KernelNet(torch.nn.Module):
         bias: bool,
         omega_0: float,
         weight_dropout: float,
+        kernel_std: float
     ):
         """
         Creates an 3-layer MLP, which parameterizes a convolutional kernel as:
@@ -100,6 +101,7 @@ class KernelNet(torch.nn.Module):
         :param bias:  If True, adds a learnable bias to the layers.
         :param omega_0: Value of the omega_0 value (only used in Sine networks).
         :param weight_dropout: Dropout rate applied to the sampled convolutional kernel.
+        :param kernel_std: Desired standard deviation of output kernels.
         """
         super().__init__()
 
@@ -140,12 +142,13 @@ class KernelNet(torch.nn.Module):
             bias_value=0.0,
             is_siren=(activation_function == "Sine"),
             omega_0=omega_0,
+            kernel_std=kernel_std
         )
 
     def forward(self, x):
         return self.kernel_net(x)
 
-    def initialize(self, mean, variance, bias_value, is_siren, omega_0):
+    def initialize(self, mean, variance, bias_value, is_siren, omega_0, kernel_std):
 
         if is_siren:
             # Initialization of SIRENs
@@ -168,9 +171,8 @@ class KernelNet(torch.nn.Module):
                             m.bias.data.uniform_(-1.0, 1.0)
                             
                     if net_layer == 3:
-                        wished_std = 0.1
-                        
-                        glorot_factor = wished_std * np.sqrt(1/2) / 2
+                        # Multiplying a distribution by x multiplies the std by x. To get the std to the wished amount we divide by the previous layer std (sqrt1/2) and multiply by the desired std. Divide by 2 since we initiate between -x +x which is a range of 2x
+                        glorot_factor = kernel_std * np.sqrt(1/2) / 2
                         
                         m.weight.data.uniform_(
                             -glorot_factor, glorot_factor

@@ -250,7 +250,7 @@ def main(params):
 
     if params.load_checkpoint is not None:
         load_best_model(neptune_logger, model)
-    else:
+    elif neptune_logger is not None:
         neptune_logger.log_model_summary(model=model, max_depth=-1)
 
     # save desired attributes if you want
@@ -297,7 +297,8 @@ def main(params):
     # test
     if not params.notest:
         task = Task('Testing best model').start()
-        load_best_model(neptune_logger, model)
+        if neptune_logger is not None:
+            load_best_model(neptune_logger, model)
         trainer.test(model, test_dataloader_gen(model.current_epoch))
         task.done()
 

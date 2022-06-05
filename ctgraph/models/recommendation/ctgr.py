@@ -11,6 +11,8 @@ from ctgraph.models.recommendation.dgsr_utils import relative_order
 from ctgraph.models.recommendation.module import RecommendationModule
 
 from .ckconv_kernel2 import KernelNet
+from .gatv2_ckg import GATv2CKGConv
+from .sage_ckg import SAGECKGConv
 
 """
 python main.py --info train_attention_faithfull --dataset beauty train --accelerator gpu --devices 1 --val_epochs 1 --epochs 20 --batch_size 50 --batch_accum 1 --num_loader_workers 3 --partial_save CTGR --train_style dgsr_softmax --loss_fn ce --dropout 0 --convolution GATv2 --edge_attr none --pwit --pit_target --num_siren_layers 1 --dim_hidden_size 50 --conv_layers 3 --activation tanh --concat_previous neighbour --newsampler --n_max_trans 50 --m_order 1 --sample_all
@@ -64,6 +66,15 @@ class CTGR(RecommendationModule):
             assert self.params.homogenous
             assert not self.params.add_self_loops
             convolution = lambda: LGConv()
+        elif self.params.convolution == 'CKGSAGE':
+            assert self.params.ckg
+            convolution = lambda: SAGECKGConv(self.params.embedding_size, self.params.embedding_size,
+                                      root_weight=self.params.add_self_loops, ckg=True)
+        elif self.params.convolution == 'CKGGATv2':
+            assert self.params.ckg
+            convolution = lambda: GATv2CKGConv(self.params.embedding_size, self.params.embedding_size,
+                                            fill_value=0, heads=self.params.heads, edge_dim=1,
+                                            add_self_loops=self.params.add_self_loops)
         else:
             raise NotImplementedError()
 
@@ -85,7 +96,7 @@ class CTGR(RecommendationModule):
         # -- fancy prediction --
         if self.params.pit:
             layered_embeddings_length = self.params.embedding_size * (self.params.conv_layers + 1)
-            
+
             self.predict_W_u = nn.Linear(layered_embeddings_length, self.params.embedding_size, bias=False)
             self.predict_W_i = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
             self.predict_W_tu = nn.Linear(self.params.embedding_size, self.params.embedding_size, bias=False)
@@ -93,7 +104,7 @@ class CTGR(RecommendationModule):
             self.predict_a = nn.Linear(self.params.embedding_size, 1, bias=False)
 
         # -- fancy prwediction --
-        if self.params.pwit: 
+        if self.params.pwit:
             in_size = 1
             out_size = self.params.embedding_size * self.params.embedding_size * (self.params.conv_layers + 1)
 
@@ -104,7 +115,8 @@ class CTGR(RecommendationModule):
             dropout = 0.3
 
             # to cuda is hotfix
-            self.transform_kernel_creator = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1, bias, omega_0, dropout).to('cuda')
+            self.transform_kernel_creator = KernelNet(in_size, out_size, kernel_hidden_size, 'Sine', 'LayerNorm', 1,
+                                                      bias, omega_0, dropout).to('cuda')
 
         # -- normal prediction --
         elif self.params.layered_embedding == 'cat':
@@ -160,6 +172,7 @@ class CTGR(RecommendationModule):
         parser.add_argument('--pit', action='store_true')
         parser.add_argument('--pwit', action='store_true')
         parser.add_argument('--pit_target', action='store_true')
+        parser.add_argument('--ckg', action='store_true')
         continuous_embedding.ContinuousTimeEmbedder.add_args(parser)
 
     def forward(self, graph, predict_u, predict_i=None, predict_i_ptr=None):
@@ -201,8 +214,8 @@ class CTGR(RecommendationModule):
             t = graph['u'].t_max[predict_u] if not self.params.pit_target else t
 
             # embed ts
-            pt_u = self.continuous_user_embedding.net(t.reshape((-1,1)))
-            pt_i = self.continuous_item_embedding.net(t.reshape((-1,1)))
+            pt_u = self.continuous_user_embedding.net(t.reshape((-1, 1)))
+            pt_i = self.continuous_item_embedding.net(t.reshape((-1, 1)))
 
             # predict (if statement could be removed later)
             if predict_i is not None:
@@ -221,7 +234,7 @@ class CTGR(RecommendationModule):
                 item_scores = layered_embeddings_u @ self.transform(embeddings_i).T
 
                 # pt_u W_2 e_i
-                tu_score = pt_u @ self.predict_W_tu(embeddings_i).T 
+                tu_score = pt_u @ self.predict_W_tu(embeddings_i).T
 
                 # pt_i W_3 e_i
                 ti_score = pt_i @ self.predict_W_ti(embeddings_i).T
@@ -358,6 +371,17 @@ class CTGR(RecommendationModule):
                 ('i', 'rev_b', 'u'): self.continuous_user_embedding(graph)
             }
 
+        if self.params.ckg:
+            edges_t = graph[('u', 'b', 'i')].t
+            u_t = graph['u'].t_max
+            i_t = graph['i'].t_max
+            edge_index = graph[('u', 'b', 'i')].edge_index
+            user_per_trans, item_per_trans = edge_index[0, :], edge_index[1, :]
+            edge_time_dict = {
+                ('u', 'b', 'i'):  u_t[user_per_trans] - edges_t,
+                ('i', 'rev_b', 'u'): i_t[item_per_trans] - edges_t
+            }
+
         # TODO: edge_attr_dict with positional embeddings and such for GAT
         # TODO: Treat articles and users symmetrically: get layered embedding for both
         layer_embeddings_u = [x_dict['u'][predict_u]]
@@ -367,6 +391,8 @@ class CTGR(RecommendationModule):
                 # this is unnecessary computation since the embeddings themselves are learnable too but
                 # otherwise I don't think it matters
                 x_dict_new = conv(x_dict, edge_index_dict, edge_attr_dict=edge_attr_dict)
+            elif self.params.ckg:
+                x_dict_new = conv(x_dict, edge_index_dict,  edge_attr_dict=edge_time_dict)
             else:
                 x_dict_new = conv(x_dict, edge_index_dict)
 
