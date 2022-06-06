@@ -30,7 +30,6 @@ dask==2022.3.0
 debugpy==1.5.1
 decorator==4.4.2
 defusedxml==0.7.1
-dgl==0.8.1
 dglgo==0.0.1
 docutils==0.17.1
 einops==0.4.1
