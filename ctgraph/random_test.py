@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 from main import parse_params
 
 """ --testnormaltoo
-python main.py random_test --load_checkpoint CTGRLOD-30
+python main.py random_test --load_checkpoint CTGRLOD-33
 """
 
 # global arguments

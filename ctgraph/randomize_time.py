@@ -1,5 +1,7 @@
 import torch
 
+from ctgraph.models.recommendation.dgsr_utils import relative_order
+
 
 def randomize_time(batch):
     # randomize timesteps
@@ -13,8 +15,19 @@ def randomize_time(batch):
     batch[('target')].t = fake_t_target
 
     # randomize oui
+    u_code = batch['u'].code
+    i_code = batch['i'].code
+    edge_index = batch[('u', 'b', 'i')].edge_index
+    user_per_trans, item_per_trans = edge_index[0], edge_index[1]
+
+    oui = batch[('u', 'b', 'i')].oui
+    oiu = batch[('u', 'b', 'i')].oiu
+    rui = relative_order(oui, user_per_trans, n=50)
+    riu = relative_order(oiu, item_per_trans, n=50)
+
     n=50
-    batch[("u", "b", "i")].oui = torch.randint(low=0, high=n, size=batch[("u", "b", "i")].oui.shape, device=real_t.device)
-    batch[("u", "b", "i")].oiu = torch.randint(low=0, high=n, size=batch[("u", "b", "i")].oiu.shape,device=real_t.device)
+    batch[("u", "b", "i")].oui = rui[torch.randperm(rui.shape[0], device=real_t.device)] # torch.randint(low=39, high=50, size=batch[("u", "b", "i")].oui.shape, device=real_t.device)
+    batch[("u", "b", "i")].oiu = riu[torch.randperm(riu.shape[0], device=real_t.device)] # torch.randint(low=39, high=50, size=batch[("u", "b", "i")].oiu.shape,device=real_t.device)
+
 
     return batch
