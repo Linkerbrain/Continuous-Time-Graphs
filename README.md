@@ -2,7 +2,7 @@
 
 Install torch geometric manually https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html
 
-Install dgl manually https://www.dgl.ai/pages/start.html
+May also need to install dgl manually https://www.dgl.ai/pages/start.html
 
 Then install all further requiremets with
 
